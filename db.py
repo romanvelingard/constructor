@@ -13,7 +13,6 @@ def get_connection():
     url = os.environ.get("DATABASE_URL")
     if url and (url.startswith("postgres://") or url.startswith("postgresql://")):
         import psycopg2
-        # Some platforms specify postgres:// which psycopg2 sometimes requires to be postgresql://
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
         return psycopg2.connect(url)
@@ -35,20 +34,61 @@ def execute_many(cursor, sql, params_list):
     return cursor
 
 def init_db():
-    """Initialize database tables and seed default values if empty."""
+    """Initialize database tables, run migrations, and seed default values."""
     conn = get_connection()
     cursor = conn.cursor()
 
-    # 1. Create foods table
+    # 1. Create foods table with carbs & fat columns
     execute_query(cursor, """
         CREATE TABLE IF NOT EXISTS foods (
             name TEXT PRIMARY KEY,
             category TEXT NOT NULL,
-            protein_density REAL NOT NULL
+            protein_density REAL NOT NULL,
+            carbs_density REAL NOT NULL DEFAULT 0.0,
+            fat_density REAL NOT NULL DEFAULT 0.0
         )
     """)
 
-    # 2. Create meal_plan table
+    # 2. Run Migration: Check if carbs_density exists in existing foods table (for backward compatibility)
+    try:
+        execute_query(cursor, "SELECT carbs_density FROM foods LIMIT 1")
+    except Exception:
+        # Transaction must be rolled back on Postgres if a select query fails
+        conn.rollback()
+        cursor = conn.cursor()
+        try:
+            execute_query(cursor, "ALTER TABLE foods ADD COLUMN carbs_density REAL NOT NULL DEFAULT 0.0")
+            execute_query(cursor, "ALTER TABLE foods ADD COLUMN fat_density REAL NOT NULL DEFAULT 0.0")
+            conn.commit()
+            
+            # Populate existing seeded items with realistic macronutrients
+            default_macros = {
+                'Turkey': (25.0, 0.0, 1.0),
+                'Chicken': (24.0, 0.0, 3.0),
+                'Fish': (21.0, 0.0, 5.0),
+                'Beef': (26.0, 0.0, 15.0),
+                'Liver': (20.0, 4.0, 5.0),
+                'Tuna': (22.0, 0.0, 1.0),
+                'Sardines': (23.0, 0.0, 10.0),
+                'Beans': (8.0, 20.0, 0.5),
+                'Cottage Cheese': (15.0, 3.0, 4.0),
+                'Tofu': (15.0, 2.0, 8.0),
+                'Buckwheat': (3.0, 20.0, 1.0),
+                'Quinoa': (4.0, 21.0, 2.0),
+                'Rice': (2.5, 28.0, 0.3),
+                'Potato': (2.0, 17.0, 0.1),
+                'Pasta': (5.0, 30.0, 1.0),
+                'Almonds': (21.0, 22.0, 50.0),
+                'Cashews': (18.0, 30.0, 44.0),
+                'Walnuts': (15.0, 14.0, 65.0)
+            }
+            for name, (p, c, f) in default_macros.items():
+                execute_query(cursor, "UPDATE foods SET protein_density = ?, carbs_density = ?, fat_density = ? WHERE name = ?", (p, c, f, name))
+            conn.commit()
+        except Exception:
+            pass
+
+    # 3. Create meal_plan table
     execute_query(cursor, """
         CREATE TABLE IF NOT EXISTS meal_plan (
             day TEXT NOT NULL,
@@ -59,18 +99,51 @@ def init_db():
         )
     """)
 
-    # 3. Create checked_groceries table
+    # Migration: Update 'Снэк' to 'Снэк 1' and seed 'Снэк 2' if they exist
+    try:
+        execute_query(cursor, "SELECT COUNT(*) FROM meal_plan WHERE meal_type = 'Снэк'")
+        if cursor.fetchone()[0] > 0:
+            execute_query(cursor, "UPDATE meal_plan SET meal_type = 'Снэк 1' WHERE meal_type = 'Снэк'")
+            days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            for day in days_of_week:
+                if is_postgres():
+                    execute_query(cursor, "INSERT INTO meal_plan (day, meal_type, food_name, garnish_name) VALUES (?, 'Снэк 2', 'None', NULL) ON CONFLICT (day, meal_type) DO NOTHING", (day,))
+                else:
+                    execute_query(cursor, "INSERT OR IGNORE INTO meal_plan (day, meal_type, food_name, garnish_name) VALUES (?, 'Снэк 2', 'None', NULL)", (day,))
+            conn.commit()
+    except Exception:
+        pass
+
+    # 4. Create checked_groceries table
     execute_query(cursor, """
         CREATE TABLE IF NOT EXISTS checked_groceries (
             item_key TEXT PRIMARY KEY
         )
     """)
 
-    # 4. Create settings table (use setting_key instead of key to avoid PG reserved keyword issues)
+    # 5. Create settings table
     execute_query(cursor, """
         CREATE TABLE IF NOT EXISTS settings (
             setting_key TEXT PRIMARY KEY,
             value REAL NOT NULL
+        )
+    """)
+
+    # 6. Create weight_history table
+    execute_query(cursor, """
+        CREATE TABLE IF NOT EXISTS weight_history (
+            date TEXT PRIMARY KEY,
+            weight REAL NOT NULL
+        )
+    """)
+
+    # 7. Create injection_history table
+    execute_query(cursor, """
+        CREATE TABLE IF NOT EXISTS injection_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            medication TEXT NOT NULL,
+            dose REAL NOT NULL
         )
     """)
 
@@ -80,29 +153,29 @@ def init_db():
     execute_query(cursor, "SELECT COUNT(*) FROM foods")
     if cursor.fetchone()[0] == 0:
         default_foods = [
-            # Proteins
-            ('Turkey', 'Proteins', 25.0),
-            ('Chicken', 'Proteins', 24.0),
-            ('Fish', 'Proteins', 21.0),
-            ('Beef', 'Proteins', 26.0),
-            ('Liver', 'Proteins', 20.0),
-            ('Tuna', 'Proteins', 22.0),
-            ('Sardines', 'Proteins', 23.0),
-            ('Beans', 'Proteins', 8.0),
-            ('Cottage Cheese', 'Proteins', 15.0),
-            ('Tofu', 'Proteins', 15.0),
+            # Proteins (name, category, protein, carbs, fat)
+            ('Turkey', 'Proteins', 25.0, 0.0, 1.0),
+            ('Chicken', 'Proteins', 24.0, 0.0, 3.0),
+            ('Fish', 'Proteins', 21.0, 0.0, 5.0),
+            ('Beef', 'Proteins', 26.0, 0.0, 15.0),
+            ('Liver', 'Proteins', 20.0, 4.0, 5.0),
+            ('Tuna', 'Proteins', 22.0, 0.0, 1.0),
+            ('Sardines', 'Proteins', 23.0, 0.0, 10.0),
+            ('Beans', 'Proteins', 8.0, 20.0, 0.5),
+            ('Cottage Cheese', 'Proteins', 15.0, 3.0, 4.0),
+            ('Tofu', 'Proteins', 15.0, 2.0, 8.0),
             # Garnishes
-            ('Buckwheat', 'Garnish', 0.0),
-            ('Quinoa', 'Garnish', 0.0),
-            ('Rice', 'Garnish', 0.0),
-            ('Potato', 'Garnish', 0.0),
-            ('Pasta', 'Garnish', 0.0),
+            ('Buckwheat', 'Garnish', 3.0, 20.0, 1.0),
+            ('Quinoa', 'Garnish', 4.0, 21.0, 2.0),
+            ('Rice', 'Garnish', 2.5, 28.0, 0.3),
+            ('Potato', 'Garnish', 2.0, 17.0, 0.1),
+            ('Pasta', 'Garnish', 5.0, 30.0, 1.0),
             # Snacks
-            ('Almonds', 'Snack', 21.0),
-            ('Cashews', 'Snack', 18.0),
-            ('Walnuts', 'Snack', 15.0)
+            ('Almonds', 'Snack', 21.0, 22.0, 50.0),
+            ('Cashews', 'Snack', 18.0, 30.0, 44.0),
+            ('Walnuts', 'Snack', 15.0, 14.0, 65.0)
         ]
-        execute_many(cursor, "INSERT INTO foods (name, category, protein_density) VALUES (?, ?, ?)", default_foods)
+        execute_many(cursor, "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density) VALUES (?, ?, ?, ?, ?)", default_foods)
         conn.commit()
 
     # Seed default meal plan if empty
@@ -113,12 +186,14 @@ def init_db():
         for day in days_of_week:
             # Завтрак
             default_plans.append((day, "Завтрак", "Cottage Cheese", "None"))
+            # Снэк 1
+            default_plans.append((day, "Снэк 1", "Almonds", None))
             # Обед
             default_plans.append((day, "Обед", "Chicken", "Buckwheat"))
+            # Снэк 2
+            default_plans.append((day, "Снэк 2", "Cashews", None))
             # Ужин
             default_plans.append((day, "Ужин", "Turkey", "Rice"))
-            # Снэк
-            default_plans.append((day, "Снэк", "Almonds", None))
         
         execute_many(cursor, "INSERT INTO meal_plan (day, meal_type, food_name, garnish_name) VALUES (?, ?, ?, ?)", default_plans)
         conn.commit()
@@ -130,39 +205,51 @@ def init_db():
             ('protein_portion', 150.0),
             ('garnish_portion', 80.0),
             ('snack_portion', 30.0),
-            ('target_protein', 130.0)
+            ('target_protein', 130.0),
+            ('target_carbs', 150.0),
+            ('target_fat', 60.0)
         ]
         execute_many(cursor, "INSERT INTO settings (setting_key, value) VALUES (?, ?)", default_settings)
         conn.commit()
+    else:
+        # Seed missing target settings if settings exist but missed carbs/fat
+        for key, val in [('target_carbs', 150.0), ('target_fat', 60.0)]:
+            execute_query(cursor, "SELECT COUNT(*) FROM settings WHERE setting_key = ?", (key,))
+            if cursor.fetchone()[0] == 0:
+                execute_query(cursor, "INSERT INTO settings (setting_key, value) VALUES (?, ?)", (key, val))
+                conn.commit()
 
     conn.close()
 
 # --- Foods Database Operations ---
 
 def get_foods_by_category(category):
-    """Retrieve all foods in a given category."""
+    """Retrieve list of names for all foods in a given category."""
     conn = get_connection()
     cursor = conn.cursor()
-    execute_query(cursor, "SELECT name, protein_density FROM foods WHERE category = ?", (category,))
+    execute_query(cursor, "SELECT name FROM foods WHERE category = ?", (category,))
     rows = cursor.fetchall()
     conn.close()
-    
-    if category == 'Garnish':
-        # Garnish is stored as a list in original session_state
-        return [row[0] for row in rows]
-    else:
-        # Proteins and Snacks are stored as dictionary mapping food -> density
-        return {row[0]: row[1] for row in rows}
+    return [row[0] for row in rows]
 
-def add_food_to_db(name, category, protein_density):
-    """Insert a new food item into the database."""
+def get_all_food_macros():
+    """Retrieve macronutrient densities for all foods."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    execute_query(cursor, "SELECT name, protein_density, carbs_density, fat_density FROM foods")
+    rows = cursor.fetchall()
+    conn.close()
+    return {row[0]: {'protein': row[1], 'carbs': row[2], 'fat': row[3]} for row in rows}
+
+def add_food_to_db(name, category, protein_density, carbs_density=0.0, fat_density=0.0):
+    """Insert a new food item with macronutrients into the database."""
     conn = get_connection()
     cursor = conn.cursor()
     try:
         execute_query(
             cursor,
-            "INSERT INTO foods (name, category, protein_density) VALUES (?, ?, ?)",
-            (name, category, protein_density)
+            "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density) VALUES (?, ?, ?, ?, ?)",
+            (name, category, protein_density, carbs_density, fat_density)
         )
         conn.commit()
         success = True
@@ -185,12 +272,11 @@ def get_meal_plan_from_db():
     rows = cursor.fetchall()
     conn.close()
 
-    # Build the original session state structure
     meal_plan = {}
     for day, meal_type, food, garnish in rows:
         if day not in meal_plan:
             meal_plan[day] = {}
-        if meal_type == "Снэк":
+        if meal_type in ["Снэк 1", "Снэк 2"]:
             meal_plan[day][meal_type] = {"snack": food if food else "None"}
         else:
             meal_plan[day][meal_type] = {
@@ -205,7 +291,6 @@ def update_meal_plan_in_db(day, meal_type, food_name, garnish_name=None):
     cursor = conn.cursor()
     
     if is_postgres():
-        # Postgres ON CONFLICT syntax
         execute_query(
             cursor,
             """
@@ -218,7 +303,6 @@ def update_meal_plan_in_db(day, meal_type, food_name, garnish_name=None):
             (day, meal_type, food_name, garnish_name)
         )
     else:
-        # SQLite ON CONFLICT syntax
         execute_query(
             cursor,
             """
@@ -293,5 +377,80 @@ def update_setting_value(key, value):
             """,
             (key, value)
         )
+    conn.commit()
+    conn.close()
+
+# --- Weight Tracker Operations ---
+
+def get_weight_history():
+    """Retrieve all weight entries ordered by date."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    execute_query(cursor, "SELECT date, weight FROM weight_history ORDER BY date ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def add_weight_entry(date_str, weight):
+    """Insert or update a weight entry for a specific date."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    if is_postgres():
+        execute_query(
+            cursor,
+            """
+            INSERT INTO weight_history (date, weight) VALUES (?, ?)
+            ON CONFLICT (date) DO UPDATE SET weight = EXCLUDED.weight
+            """,
+            (date_str, weight)
+        )
+    else:
+        execute_query(
+            cursor,
+            """
+            INSERT INTO weight_history (date, weight) VALUES (?, ?)
+            ON CONFLICT (date) DO UPDATE SET weight = excluded.weight
+            """,
+            (date_str, weight)
+        )
+    conn.commit()
+    conn.close()
+
+def delete_weight_entry(date_str):
+    """Delete a weight entry."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    execute_query(cursor, "DELETE FROM weight_history WHERE date = ?", (date_str,))
+    conn.commit()
+    conn.close()
+
+# --- GLP-1 Injection Log Operations ---
+
+def get_injection_history():
+    """Retrieve all injection logs ordered by date."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    execute_query(cursor, "SELECT id, date, medication, dose FROM injection_history ORDER BY date DESC, id DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def add_injection_entry(date_str, medication, dose):
+    """Record an injection log."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    execute_query(
+        cursor,
+        "INSERT INTO injection_history (date, medication, dose) VALUES (?, ?, ?)",
+        (date_str, medication, dose)
+    )
+    conn.commit()
+    conn.close()
+
+def delete_injection_entry(entry_id):
+    """Delete an injection log."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    execute_query(cursor, "DELETE FROM injection_history WHERE id = ?", (entry_id,))
     conn.commit()
     conn.close()
