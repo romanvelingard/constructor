@@ -178,7 +178,12 @@ def init_db():
             ('Gouda cheese', 'Proteins', 25.0, 2.2, 27.0),
             ('Majadra', 'Garnish', 5.0, 23.0, 3.0),
             ('Protein Yogurt', 'Proteins', 10.0, 4.0, 0.0),
-            ('Soft white cheese', 'Proteins', 11.0, 3.5, 5.0)
+            ('Soft white cheese', 'Proteins', 11.0, 3.5, 5.0),
+            # Bread additions (Garnish category)
+            ('bread', 'Garnish', 9.0, 49.0, 3.2),
+            ('baguete', 'Garnish', 9.2, 52.0, 1.5),
+            ('rie bread', 'Garnish', 8.5, 48.0, 1.5),
+            ('Pita', 'Garnish', 9.0, 55.0, 1.2)
         ]
         execute_many(cursor, "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density) VALUES (?, ?, ?, ?, ?)", default_foods)
         conn.commit()
