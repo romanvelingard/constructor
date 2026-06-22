@@ -173,10 +173,16 @@ def init_db():
             # Snacks
             ('Almonds', 'Snack', 21.0, 22.0, 50.0),
             ('Cashews', 'Snack', 18.0, 30.0, 44.0),
-            ('Walnuts', 'Snack', 15.0, 14.0, 65.0)
+            ('Walnuts', 'Snack', 15.0, 14.0, 65.0),
+            # New GLP-1 and dietary additions
+            ('Gouda cheese', 'Proteins', 25.0, 2.2, 27.0),
+            ('Majadra', 'Garnish', 5.0, 23.0, 3.0),
+            ('Protein Yogurt', 'Proteins', 10.0, 4.0, 0.0),
+            ('Soft white cheese', 'Proteins', 11.0, 3.5, 5.0)
         ]
         execute_many(cursor, "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density) VALUES (?, ?, ?, ?, ?)", default_foods)
         conn.commit()
+
 
     # Seed default meal plan if empty
     execute_query(cursor, "SELECT COUNT(*) FROM meal_plan")
