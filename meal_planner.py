@@ -3,6 +3,7 @@ import pandas as pd
 import random
 import os
 import json
+import db
 
 # Page configuration
 st.set_page_config(
@@ -104,22 +105,25 @@ def translate_food(key):
 
 # 2. State Management & Initial Database
 # We define keys in English internally to remain language-independent
-if 'proteins_db' not in st.session_state or 'Turkey' not in st.session_state.proteins_db:
-    st.session_state.proteins_db = {
-        'Turkey': 25.0, 'Chicken': 24.0, 'Fish': 21.0, 'Beef': 26.0, 
-        'Liver': 20.0, 'Tuna': 22.0, 'Sardines': 23.0, 'Beans': 8.0, 'Cottage Cheese': 15.0,
-        'Tofu': 15.0
-    }
+db.init_db()
 
-if 'garnishes_db' not in st.session_state or 'Buckwheat' not in st.session_state.garnishes_db:
-    st.session_state.garnishes_db = ['Buckwheat', 'Quinoa', 'Rice', 'Potato', 'Pasta']
+if 'db_loaded' not in st.session_state:
+    st.session_state.proteins_db = db.get_foods_by_category("Proteins")
+    st.session_state.garnishes_db = db.get_foods_by_category("Garnish")
+    st.session_state.snacks_db = db.get_foods_by_category("Snack")
+    st.session_state.meal_plan = db.get_meal_plan_from_db()
+    st.session_state.checked_groceries = db.get_checked_groceries_from_db()
+    st.session_state.db_loaded = True
 
-if 'snacks_db' not in st.session_state or 'Almonds' not in st.session_state.snacks_db:
-    st.session_state.snacks_db = {
-        'Almonds': 21.0,
-        'Cashews': 18.0,
-        'Walnuts': 15.0
-    }
+# Load settings from db to session_state
+if 'protein_portion' not in st.session_state:
+    st.session_state.protein_portion = int(db.get_setting_value('protein_portion', 150.0))
+if 'garnish_portion' not in st.session_state:
+    st.session_state.garnish_portion = int(db.get_setting_value('garnish_portion', 80.0))
+if 'snack_portion' not in st.session_state:
+    st.session_state.snack_portion = int(db.get_setting_value('snack_portion', 30.0))
+if 'target_protein' not in st.session_state:
+    st.session_state.target_protein = int(db.get_setting_value('target_protein', 130.0))
 
 # Active week pool state bindings (references English keys)
 if 'active_proteins' not in st.session_state or not all(k in st.session_state.proteins_db for k in st.session_state.active_proteins):
@@ -131,21 +135,7 @@ if 'active_garnishes' not in st.session_state or not all(k in st.session_state.g
 if 'active_snacks' not in st.session_state or not all(k in st.session_state.snacks_db for k in st.session_state.active_snacks):
     st.session_state.active_snacks = list(st.session_state.snacks_db.keys())
 
-if 'checked_groceries' not in st.session_state:
-    st.session_state.checked_groceries = set()
-
 days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-# Preload/upgrade initial plan using English keys
-if 'meal_plan' not in st.session_state or 'Monday' not in st.session_state.meal_plan or 'Завтрак' not in st.session_state.meal_plan['Monday']:
-    st.session_state.meal_plan = {
-        day: {
-            "Завтрак": {"protein": "Cottage Cheese", "garnish": "None"},
-            "Обед": {"protein": "Chicken", "garnish": "Buckwheat"},
-            "Ужин": {"protein": "Turkey", "garnish": "Rice"},
-            "Снэк": {"snack": "Almonds"}
-        } for day in days_of_week
-    }
 
 # Modal Dialog Function
 @st.dialog(_t('dialog_title'))
@@ -173,23 +163,29 @@ def add_product_dialog():
     if st.button(_t('save_btn'), use_container_width=True):
         clean_name = name.strip()
         if clean_name:
-            if category == "Proteins":
-                st.session_state.proteins_db[clean_name] = protein_density
-                if clean_name not in st.session_state.active_proteins:
-                    st.session_state.active_proteins.append(clean_name)
-            elif category == "Snack":
-                st.session_state.snacks_db[clean_name] = protein_density
-                if clean_name not in st.session_state.active_snacks:
-                    st.session_state.active_snacks.append(clean_name)
+            actual_density = 0.0 if category == "Garnish" else protein_density
+            success = db.add_food_to_db(clean_name, category, actual_density)
+            if success:
+                if category == "Proteins":
+                    st.session_state.proteins_db[clean_name] = actual_density
+                    if clean_name not in st.session_state.active_proteins:
+                        st.session_state.active_proteins.append(clean_name)
+                elif category == "Snack":
+                    st.session_state.snacks_db[clean_name] = actual_density
+                    if clean_name not in st.session_state.active_snacks:
+                        st.session_state.active_snacks.append(clean_name)
+                else:
+                    if clean_name not in st.session_state.garnishes_db:
+                        st.session_state.garnishes_db.append(clean_name)
+                    if clean_name not in st.session_state.active_garnishes:
+                        st.session_state.active_garnishes.append(clean_name)
+                st.success(_t('success_added_msg').format(name=clean_name))
+                st.rerun()
             else:
-                if clean_name not in st.session_state.garnishes_db:
-                    st.session_state.garnishes_db.append(clean_name)
-                if clean_name not in st.session_state.active_garnishes:
-                    st.session_state.active_garnishes.append(clean_name)
-            st.success(_t('success_added_msg').format(name=clean_name))
-            st.rerun()
+                st.error("This product already exists in the database!")
         else:
             st.error(_t('error_empty_name'))
+
 
 # 3. Sidebar Controls
 with st.sidebar:
@@ -217,14 +213,19 @@ with st.sidebar:
     
     # Portions
     st.subheader(_t('portion_header'))
-    protein_portion = st.slider(_t('protein_portion_label'), min_value=50, max_value=400, value=150, step=10)
-    garnish_portion = st.slider(_t('garnish_portion_label'), min_value=30, max_value=300, value=80, step=5)
-    snack_portion = st.slider(_t('snack_portion_label'), min_value=10, max_value=150, value=30, step=5)
+    
+    def update_portion_setting(key):
+        db.update_setting_value(key, float(st.session_state[key]))
+
+    protein_portion = st.slider(_t('protein_portion_label'), min_value=50, max_value=400, key="protein_portion", on_change=update_portion_setting, args=("protein_portion",), step=10)
+    garnish_portion = st.slider(_t('garnish_portion_label'), min_value=30, max_value=300, key="garnish_portion", on_change=update_portion_setting, args=("garnish_portion",), step=5)
+    snack_portion = st.slider(_t('snack_portion_label'), min_value=10, max_value=150, key="snack_portion", on_change=update_portion_setting, args=("snack_portion",), step=5)
     
     st.divider()
     
     st.subheader(_t('goals_header'))
-    target_protein = st.slider(_t('target_protein_label'), min_value=50, max_value=250, value=130, step=5)
+    target_protein = st.slider(_t('target_protein_label'), min_value=50, max_value=250, key="target_protein", on_change=update_portion_setting, args=("target_protein",), step=5)
+
     
     # Extra shopping list notes
     st.subheader(_t('additional_list_header'))
@@ -337,14 +338,26 @@ with tab_menu:
                 st.markdown(f"**{_t('snack')}**")
                 snack_s = st.selectbox(f"Снэк (Перекус)##{day}", active_snacks_options, index=snack_s_idx, format_func=translate_food, label_visibility="collapsed")
                 
-                # Save choice to session state
-                st.session_state.meal_plan[day]["Завтрак"]["protein"] = break_p
-                st.session_state.meal_plan[day]["Завтрак"]["garnish"] = break_g
-                st.session_state.meal_plan[day]["Обед"]["protein"] = lunch_p
-                st.session_state.meal_plan[day]["Обед"]["garnish"] = lunch_g
-                st.session_state.meal_plan[day]["Ужин"]["protein"] = dinner_p
-                st.session_state.meal_plan[day]["Ужин"]["garnish"] = dinner_g
-                st.session_state.meal_plan[day]["Снэк"]["snack"] = snack_s
+                # Save choice to session state & DB if changed
+                if break_p != stored_break_p or break_g != stored_break_g:
+                    st.session_state.meal_plan[day]["Завтрак"]["protein"] = break_p
+                    st.session_state.meal_plan[day]["Завтрак"]["garnish"] = break_g
+                    db.update_meal_plan_in_db(day, "Завтрак", break_p, break_g)
+                
+                if lunch_p != stored_lunch_p or lunch_g != stored_lunch_g:
+                    st.session_state.meal_plan[day]["Обед"]["protein"] = lunch_p
+                    st.session_state.meal_plan[day]["Обед"]["garnish"] = lunch_g
+                    db.update_meal_plan_in_db(day, "Обед", lunch_p, lunch_g)
+                
+                if dinner_p != stored_dinner_p or dinner_g != stored_dinner_g:
+                    st.session_state.meal_plan[day]["Ужин"]["protein"] = dinner_p
+                    st.session_state.meal_plan[day]["Ужин"]["garnish"] = dinner_g
+                    db.update_meal_plan_in_db(day, "Ужин", dinner_p, dinner_g)
+                
+                if snack_s != stored_snack_s:
+                    st.session_state.meal_plan[day]["Снэк"]["snack"] = snack_s
+                    db.update_meal_plan_in_db(day, "Снэк", snack_s)
+
                 
                 # Calculate daily protein content
                 day_protein = 0
@@ -366,13 +379,26 @@ with tab_menu:
             
             if st.button(_t('autofill_btn'), use_container_width=True):
                 for day in days_of_week:
-                    st.session_state.meal_plan[day]["Завтрак"]["protein"] = random.choice(st.session_state.active_proteins) if st.session_state.active_proteins else "None"
-                    st.session_state.meal_plan[day]["Завтрак"]["garnish"] = random.choice(st.session_state.active_garnishes) if st.session_state.active_garnishes else "None"
-                    st.session_state.meal_plan[day]["Обед"]["protein"] = random.choice(st.session_state.active_proteins) if st.session_state.active_proteins else "None"
-                    st.session_state.meal_plan[day]["Обед"]["garnish"] = random.choice(st.session_state.active_garnishes) if st.session_state.active_garnishes else "None"
-                    st.session_state.meal_plan[day]["Ужин"]["protein"] = random.choice(st.session_state.active_proteins) if st.session_state.active_proteins else "None"
-                    st.session_state.meal_plan[day]["Ужин"]["garnish"] = random.choice(st.session_state.active_garnishes) if st.session_state.active_garnishes else "None"
-                    st.session_state.meal_plan[day]["Снэк"]["snack"] = random.choice(st.session_state.active_snacks) if st.session_state.active_snacks else "None"
+                    break_p = random.choice(st.session_state.active_proteins) if st.session_state.active_proteins else "None"
+                    break_g = random.choice(st.session_state.active_garnishes) if st.session_state.active_garnishes else "None"
+                    lunch_p = random.choice(st.session_state.active_proteins) if st.session_state.active_proteins else "None"
+                    lunch_g = random.choice(st.session_state.active_garnishes) if st.session_state.active_garnishes else "None"
+                    dinner_p = random.choice(st.session_state.active_proteins) if st.session_state.active_proteins else "None"
+                    dinner_g = random.choice(st.session_state.active_garnishes) if st.session_state.active_garnishes else "None"
+                    snack_s = random.choice(st.session_state.active_snacks) if st.session_state.active_snacks else "None"
+                    
+                    st.session_state.meal_plan[day]["Завтрак"]["protein"] = break_p
+                    st.session_state.meal_plan[day]["Завтрак"]["garnish"] = break_g
+                    st.session_state.meal_plan[day]["Обед"]["protein"] = lunch_p
+                    st.session_state.meal_plan[day]["Обед"]["garnish"] = lunch_g
+                    st.session_state.meal_plan[day]["Ужин"]["protein"] = dinner_p
+                    st.session_state.meal_plan[day]["Ужин"]["garnish"] = dinner_g
+                    st.session_state.meal_plan[day]["Снэк"]["snack"] = snack_s
+                    
+                    db.update_meal_plan_in_db(day, "Завтрак", break_p, break_g)
+                    db.update_meal_plan_in_db(day, "Обед", lunch_p, lunch_g)
+                    db.update_meal_plan_in_db(day, "Ужин", dinner_p, dinner_g)
+                    db.update_meal_plan_in_db(day, "Снэк", snack_s)
                 st.rerun()
                 
             if st.button(_t('copy_mon_btn'), use_container_width=True):
@@ -384,6 +410,10 @@ with tab_menu:
                         "Ужин": mon_plan["Ужин"].copy(),
                         "Снэк": mon_plan["Снэк"].copy()
                     }
+                    db.update_meal_plan_in_db(day, "Завтрак", mon_plan["Завтрак"]["protein"], mon_plan["Завтрак"]["garnish"])
+                    db.update_meal_plan_in_db(day, "Обед", mon_plan["Обед"]["protein"], mon_plan["Обед"]["garnish"])
+                    db.update_meal_plan_in_db(day, "Ужин", mon_plan["Ужин"]["protein"], mon_plan["Ужин"]["garnish"])
+                    db.update_meal_plan_in_db(day, "Снэк", mon_plan["Снэк"]["snack"])
                 st.rerun()
                 
             if st.button(_t('clear_menu_btn'), use_container_width=True):
@@ -395,7 +425,13 @@ with tab_menu:
                     st.session_state.meal_plan[day]["Ужин"]["protein"] = "None"
                     st.session_state.meal_plan[day]["Ужин"]["garnish"] = "None"
                     st.session_state.meal_plan[day]["Снэк"]["snack"] = "None"
+                    
+                    db.update_meal_plan_in_db(day, "Завтрак", "None", "None")
+                    db.update_meal_plan_in_db(day, "Обед", "None", "None")
+                    db.update_meal_plan_in_db(day, "Ужин", "None", "None")
+                    db.update_meal_plan_in_db(day, "Снэк", "None")
                 st.rerun()
+
 
 # ---- TAB 2: SHOPPING LIST ----
 with tab_list:
@@ -445,10 +481,14 @@ with tab_list:
                 item_key = f"chk_protein_{item}_{weight}"
                 is_checked = item_key in st.session_state.checked_groceries
                 
-                if st.checkbox(item_label, value=is_checked, key=item_key):
-                    st.session_state.checked_groceries.add(item_key)
-                else:
-                    st.session_state.checked_groceries.discard(item_key)
+                checked = st.checkbox(item_label, value=is_checked, key=item_key)
+                if checked != is_checked:
+                    if checked:
+                        st.session_state.checked_groceries.add(item_key)
+                        db.set_grocery_checked_state(item_key, True)
+                    else:
+                        st.session_state.checked_groceries.discard(item_key)
+                        db.set_grocery_checked_state(item_key, False)
         
         # Display Garnishes
         if shopping_garnishes:
@@ -459,11 +499,15 @@ with tab_list:
                 item_key = f"chk_garnish_{item}_{weight}"
                 is_checked = item_key in st.session_state.checked_groceries
                 
-                if st.checkbox(item_label, value=is_checked, key=item_key):
-                    st.session_state.checked_groceries.add(item_key)
-                else:
-                    st.session_state.checked_groceries.discard(item_key)
-                    
+                checked = st.checkbox(item_label, value=is_checked, key=item_key)
+                if checked != is_checked:
+                    if checked:
+                        st.session_state.checked_groceries.add(item_key)
+                        db.set_grocery_checked_state(item_key, True)
+                    else:
+                        st.session_state.checked_groceries.discard(item_key)
+                        db.set_grocery_checked_state(item_key, False)
+                     
         # Display Snacks
         if shopping_snacks:
             has_items = True
@@ -473,11 +517,15 @@ with tab_list:
                 item_key = f"chk_snack_{item}_{weight}"
                 is_checked = item_key in st.session_state.checked_groceries
                 
-                if st.checkbox(item_label, value=is_checked, key=item_key):
-                    st.session_state.checked_groceries.add(item_key)
-                else:
-                    st.session_state.checked_groceries.discard(item_key)
-                    
+                checked = st.checkbox(item_label, value=is_checked, key=item_key)
+                if checked != is_checked:
+                    if checked:
+                        st.session_state.checked_groceries.add(item_key)
+                        db.set_grocery_checked_state(item_key, True)
+                    else:
+                        st.session_state.checked_groceries.discard(item_key)
+                        db.set_grocery_checked_state(item_key, False)
+                     
         # Display Extras
         if extra_items_list:
             has_items = True
@@ -486,13 +534,18 @@ with tab_list:
                 item_key = f"chk_extra_{item}_{i}"
                 is_checked = item_key in st.session_state.checked_groceries
                 
-                if st.checkbox(item, value=is_checked, key=item_key):
-                    st.session_state.checked_groceries.add(item_key)
-                else:
-                    st.session_state.checked_groceries.discard(item_key)
-                    
+                checked = st.checkbox(item, value=is_checked, key=item_key)
+                if checked != is_checked:
+                    if checked:
+                        st.session_state.checked_groceries.add(item_key)
+                        db.set_grocery_checked_state(item_key, True)
+                    else:
+                        st.session_state.checked_groceries.discard(item_key)
+                        db.set_grocery_checked_state(item_key, False)
+                        
         if not has_items:
             st.info(_t('empty_shopping_list_info'))
+
             
     with col_raw:
         st.markdown(_t('raw_text_header'))
