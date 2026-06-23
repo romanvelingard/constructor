@@ -111,6 +111,9 @@ if 'db_loaded' not in st.session_state:
     st.session_state.proteins_db = db.get_foods_by_category("Proteins")
     st.session_state.garnishes_db = db.get_foods_by_category("Garnish")
     st.session_state.snacks_db = db.get_foods_by_category("Snack")
+    st.session_state.salads_db = db.get_foods_by_category("Salad")
+    st.session_state.dressings_db = db.get_foods_by_category("Dressing")
+    st.session_state.others_db = db.get_foods_by_category("Other")
     st.session_state.food_macros = db.get_all_food_macros()
     st.session_state.meal_plan = db.get_meal_plan_from_db()
     st.session_state.checked_groceries = db.get_checked_groceries_from_db()
@@ -130,6 +133,20 @@ if 'target_carbs' not in st.session_state:
 if 'target_fat' not in st.session_state:
     st.session_state.target_fat = int(db.get_setting_value('target_fat', 60.0))
 
+protein_portion = st.session_state.protein_portion
+garnish_portion = st.session_state.garnish_portion
+snack_portion = st.session_state.snack_portion
+
+
+
+if 'profile_username' not in st.session_state:
+    st.session_state.profile_username = db.get_profile_value('username', '')
+if 'profile_password' not in st.session_state:
+    st.session_state.profile_password = db.get_profile_value('password', '')
+if 'profile_email' not in st.session_state:
+    st.session_state.profile_email = db.get_profile_value('email', '')
+if 'profile_gender' not in st.session_state:
+    st.session_state.profile_gender = db.get_profile_value('gender', 'Male')
 
 # Active week pool state bindings (references English keys)
 if 'active_proteins' not in st.session_state or not all(k in st.session_state.proteins_db for k in st.session_state.active_proteins):
@@ -147,7 +164,7 @@ days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturda
 # Modal Dialog Function
 @st.dialog(_t('dialog_title'))
 def add_product_dialog():
-    category_options = ["Proteins", "Garnish", "Snack"]
+    category_options = ["Proteins", "Garnish", "Snack", "Salad", "Dressing", "Other"]
     
     category = st.selectbox(
         _t('type_label'), 
@@ -202,11 +219,20 @@ def add_product_dialog():
                         st.session_state.snacks_db.append(clean_name)
                     if clean_name not in st.session_state.active_snacks:
                         st.session_state.active_snacks.append(clean_name)
-                else:
+                elif category == "Garnish":
                     if clean_name not in st.session_state.garnishes_db:
                         st.session_state.garnishes_db.append(clean_name)
                     if clean_name not in st.session_state.active_garnishes:
                         st.session_state.active_garnishes.append(clean_name)
+                elif category == "Salad":
+                    if clean_name not in st.session_state.salads_db:
+                        st.session_state.salads_db.append(clean_name)
+                elif category == "Dressing":
+                    if clean_name not in st.session_state.dressings_db:
+                        st.session_state.dressings_db.append(clean_name)
+                elif category == "Other":
+                    if clean_name not in st.session_state.others_db:
+                        st.session_state.others_db.append(clean_name)
                 
                 # Update cache
                 st.session_state.food_macros[clean_name] = {
@@ -222,56 +248,11 @@ def add_product_dialog():
         else:
             st.error(_t('error_empty_name'))
 
+# 3. Settings Helpers
+def update_portion_setting(key):
+    db.update_setting_value(key, float(st.session_state[key]))
 
-
-# 3. Sidebar Controls
-with st.sidebar:
-    st.header(_t('actions_header'))
-    
-    # Language Selector Toggle
-    lang_choices = {"ru": "🇷🇺 Русский", "en": "🇬🇧 English"}
-    lang_val = st.selectbox(
-        _t('lang_label'), 
-        options=list(lang_choices.keys()), 
-        format_func=lambda x: lang_choices[x],
-        index=0 if lang == 'ru' else 1
-    )
-    if lang_val != st.session_state.lang:
-        st.session_state.lang = lang_val
-        st.rerun()
-        
-    st.divider()
-    
-    # Dialog Trigger Button
-    if st.button(_t('add_product_btn'), use_container_width=True, type="primary"):
-        add_product_dialog()
-        
-    st.divider()
-    
-    # Portions
-    st.subheader(_t('portion_header'))
-    
-    def update_portion_setting(key):
-        db.update_setting_value(key, float(st.session_state[key]))
-
-    protein_portion = st.slider(_t('protein_portion_label'), min_value=50, max_value=400, key="protein_portion", on_change=update_portion_setting, args=("protein_portion",), step=10)
-    garnish_portion = st.slider(_t('garnish_portion_label'), min_value=30, max_value=300, key="garnish_portion", on_change=update_portion_setting, args=("garnish_portion",), step=5)
-    snack_portion = st.slider(_t('snack_portion_label'), min_value=10, max_value=150, key="snack_portion", on_change=update_portion_setting, args=("snack_portion",), step=5)
-    
-    st.divider()
-    
-    st.subheader(_t('goals_header'))
-    target_protein = st.slider(_t('target_protein_label'), min_value=50, max_value=250, key="target_protein", on_change=update_portion_setting, args=("target_protein",), step=5)
-    target_carbs = st.slider(_t('target_carbs_label'), min_value=50, max_value=400, key="target_carbs", on_change=update_portion_setting, args=("target_carbs",), step=5)
-    target_fat = st.slider(_t('target_fat_label'), min_value=20, max_value=150, key="target_fat", on_change=update_portion_setting, args=("target_fat",), step=5)
-
-
-    
-    # Extra shopping list notes
-    st.subheader(_t('additional_list_header'))
-    extra_items_input = st.text_area(_t('additional_list_header'), 
-                                    placeholder=_t('additional_placeholder'),
-                                    label_visibility="collapsed")
+extra_items_input = st.session_state.get("extra_items_input", "")
 
 # 4. Header Title
 st.markdown(f"""
@@ -281,30 +262,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# 5. Multiselect for active week pool (from the database)
-col_sel1, col_sel2, col_sel3 = st.columns(3)
-with col_sel1:
-    selected_proteins = st.multiselect(
-        _t('select_proteins_label'), 
-        options=st.session_state.proteins_db,
-        key="active_proteins",
-        format_func=translate_food
-    )
-with col_sel2:
-    selected_garnishes = st.multiselect(
-        _t('select_garnishes_label'), 
-        options=st.session_state.garnishes_db,
-        key="active_garnishes",
-        format_func=translate_food
-    )
-with col_sel3:
-    selected_snacks = st.multiselect(
-        _t('select_snacks_label'),
-        options=st.session_state.snacks_db,
-        key="active_snacks",
-        format_func=translate_food
-    )
-
 
 # Prepare lists for selection
 active_proteins_options = ["None"] + st.session_state.active_proteins
@@ -312,12 +269,14 @@ active_garnishes_options = ["None"] + st.session_state.active_garnishes
 active_snacks_options = ["None"] + st.session_state.active_snacks
 
 # Main Workspace Tabs
-tab_menu, tab_list, tab_stats, tab_weight, tab_glp1 = st.tabs([
+tab_log, tab_menu, tab_list, tab_stats, tab_weight, tab_glp1, tab_settings = st.tabs([
+    _t('tab_log'), 
     _t('tab_menu'), 
     _t('tab_list'), 
     _t('tab_stats'),
     _t('tab_weight'),
-    _t('tab_glp1')
+    _t('tab_glp1'),
+    _t('tab_settings')
 ])
 
 
@@ -517,7 +476,297 @@ with tab_menu:
 
 
 
-# ---- TAB 2: SHOPPING LIST ----
+# ---- TAB: FOOD RECORDER & LOG ----
+with tab_log:
+    st.markdown(_t('log_header'))
+    
+    # 1. Date and Quick Actions
+    col_date, col_action_btn = st.columns([1, 1])
+    with col_date:
+        log_date = st.date_input(_t('log_date_label'), key="food_log_date_input")
+        date_str = log_date.strftime("%Y-%m-%d")
+    with col_action_btn:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button(_t('log_copy_plan_btn'), use_container_width=True):
+            # Clear existing log entries for this date
+            for entry in db.get_food_log(date_str):
+                db.delete_food_log_entry(entry['id'])
+            
+            # Map date to weekday
+            day_name = log_date.strftime('%A')
+            plan_for_day = st.session_state.meal_plan.get(day_name, {})
+            
+            # Log Breakfast
+            br = plan_for_day.get("Завтрак", {})
+            br_p = br.get("protein", "None")
+            br_g = br.get("garnish", "None")
+            if br_p != "None":
+                db.add_food_log_entry(date_str, "Завтрак", br_p, "None", float(st.session_state.protein_portion), 0.0)
+            if br_g != "None":
+                db.add_food_log_entry(date_str, "Завтрак", br_g, "None", float(st.session_state.garnish_portion), 0.0)
+            
+            # Log Snack 1
+            sn1 = plan_for_day.get("Снэк 1", {})
+            sn1_f = sn1.get("snack", "None")
+            if sn1_f != "None":
+                db.add_food_log_entry(date_str, "Снэк 1", sn1_f, "None", float(st.session_state.snack_portion), 0.0)
+            
+            # Log Lunch
+            lu = plan_for_day.get("Обед", {})
+            lu_p = lu.get("protein", "None")
+            lu_g = lu.get("garnish", "None")
+            if lu_p != "None":
+                db.add_food_log_entry(date_str, "Обед", lu_p, "None", float(st.session_state.protein_portion), 0.0)
+            if lu_g != "None":
+                db.add_food_log_entry(date_str, "Обед", lu_g, "None", float(st.session_state.garnish_portion), 0.0)
+                
+            # Log Snack 2
+            sn2 = plan_for_day.get("Снэк 2", {})
+            sn2_f = sn2.get("snack", "None")
+            if sn2_f != "None":
+                db.add_food_log_entry(date_str, "Снэк 2", sn2_f, "None", float(st.session_state.snack_portion), 0.0)
+                
+            # Log Dinner
+            di = plan_for_day.get("Ужин", {})
+            di_p = di.get("protein", "None")
+            di_g = di.get("garnish", "None")
+            if di_p != "None":
+                db.add_food_log_entry(date_str, "Ужин", di_p, "None", float(st.session_state.protein_portion), 0.0)
+            if di_g != "None":
+                db.add_food_log_entry(date_str, "Ужин", di_g, "None", float(st.session_state.garnish_portion), 0.0)
+                
+            st.success(_t('log_success_msg'))
+            st.rerun()
+
+    st.markdown("---")
+    
+    # 2. Render meal sections
+    meal_type_options = ["Завтрак", "Снэк 1", "Обед", "Снэк 2", "Ужин"]
+    def translate_meal_type(m):
+        if m == "Завтрак": return _t('breakfast')
+        if m == "Снэк 1": return _t('snack_1')
+        if m == "Обед": return _t('lunch')
+        if m == "Снэк 2": return _t('snack_2')
+        if m == "Ужин": return _t('dinner')
+        return m
+
+    log_entries = db.get_food_log(date_str)
+    all_foods = sorted(list(st.session_state.food_macros.keys()))
+    
+    # Group logs by meal type
+    entries_by_meal = {m: [] for m in meal_type_options}
+    for entry in log_entries:
+        m_type = entry['meal_type']
+        if m_type in entries_by_meal:
+            entries_by_meal[m_type].append(entry)
+            
+    day_total_p = 0.0
+    day_total_c = 0.0
+    day_total_f = 0.0
+
+    for meal_type in meal_type_options:
+        with st.container(border=True):
+            st.markdown(f"### {translate_meal_type(meal_type)}")
+            
+            meal_entries = entries_by_meal[meal_type]
+            
+            # Show list of entries for this meal
+            if meal_entries:
+                for entry in meal_entries:
+                    f_name = entry['food_name']
+                    g_name = entry['garnish_name']
+                    f_port = entry['food_portion']
+                    g_port = entry['garnish_portion']
+                    
+                    p_val, c_val, f_val = 0.0, 0.0, 0.0
+                    
+                    # Compute macros
+                    if f_name != "None" and f_name in st.session_state.food_macros:
+                        f_macro = st.session_state.food_macros[f_name]
+                        p_val += f_macro['protein'] * f_port / 100.0
+                        c_val += f_macro['carbs'] * f_port / 100.0
+                        f_val += f_macro['fat'] * f_port / 100.0
+                        
+                    if g_name != "None" and g_name in st.session_state.food_macros:
+                        g_macro = st.session_state.food_macros[g_name]
+                        p_val += g_macro['protein'] * g_port / 100.0
+                        c_val += g_macro['carbs'] * g_port / 100.0
+                        f_val += g_macro['fat'] * g_port / 100.0
+                        
+                    day_total_p += p_val
+                    day_total_c += c_val
+                    day_total_f += f_val
+                    
+                    # Row for the food entry
+                    col_item_desc, col_item_macros, col_item_del = st.columns([4, 3, 1])
+                    with col_item_desc:
+                        desc_parts = []
+                        if f_name != "None":
+                            desc_parts.append(f"{translate_food(f_name)} ({int(f_port)}g)")
+                        if g_name != "None":
+                            desc_parts.append(f"{translate_food(g_name)} ({int(g_port)}g)")
+                        st.write(" + ".join(desc_parts) if desc_parts else "-")
+                    with col_item_macros:
+                        st.write(f"P: {p_val:.1f}g | C: {c_val:.1f}g | F: {f_val:.1f}g")
+                    with col_item_del:
+                        if st.button(_t('delete_btn'), key=f"del_log_{entry['id']}", use_container_width=True):
+                            db.delete_food_log_entry(entry['id'])
+                            st.rerun()
+            else:
+                st.info("No items logged" if lang == 'en' else "Нет записанных продуктов")
+            
+            # Inline mini-form to add item to this meal
+            category_options = ["Proteins", "Garnish", "Snack", "Salad", "Dressing", "Other", "Custom"]
+            category_trans = {
+                "Proteins": translations.get("category_display", {}).get("Proteins", "Proteins"),
+                "Garnish": translations.get("category_display", {}).get("Garnish", "Garnish"),
+                "Snack": translations.get("category_display", {}).get("Snack", "Snack"),
+                "Salad": translations.get("category_display", {}).get("Salad", "Salad"),
+                "Dressing": translations.get("category_display", {}).get("Dressing", "Dressing"),
+                "Other": translations.get("category_display", {}).get("Other", "Other"),
+                "Custom": _t('category_custom')
+            }
+            
+            col_add_cat, col_add_food, col_add_portion, col_add_btn = st.columns([2, 3, 2, 2])
+            with col_add_cat:
+                selected_cat = st.selectbox(
+                    _t('log_type_label'),
+                    category_options,
+                    format_func=lambda x: category_trans.get(x, x),
+                    key=f"add_cat_select_{meal_type}",
+                    label_visibility="collapsed"
+                )
+            
+            custom_fields_active = (selected_cat == "Custom")
+            
+            with col_add_food:
+                if custom_fields_active:
+                    custom_name = st.text_input(
+                        _t('custom_name_label'),
+                        placeholder=_t('custom_name_label'),
+                        key=f"custom_name_input_{meal_type}",
+                        label_visibility="collapsed"
+                    )
+                    food_select = "Custom"
+                else:
+                    category_map = {
+                        "Proteins": st.session_state.proteins_db,
+                        "Garnish": st.session_state.garnishes_db,
+                        "Snack": st.session_state.snacks_db,
+                        "Salad": st.session_state.salads_db,
+                        "Dressing": st.session_state.dressings_db,
+                        "Other": st.session_state.others_db
+                    }
+                    cat_items = category_map.get(selected_cat, [])
+                    food_select = st.selectbox(
+                        _t('log_item_label'),
+                        ["None"] + sorted(list(cat_items)),
+                        format_func=translate_food,
+                        key=f"add_food_select_{meal_type}",
+                        label_visibility="collapsed"
+                    )
+            
+            with col_add_portion:
+                default_portion = 150.0
+                if meal_type in ["Снэк 1", "Снэк 2"]:
+                    default_portion = float(st.session_state.snack_portion)
+                elif meal_type in ["Завтрак", "Обед", "Ужин"]:
+                    if selected_cat == "Garnish":
+                        default_portion = float(st.session_state.garnish_portion)
+                    else:
+                        default_portion = float(st.session_state.protein_portion)
+                        
+                food_portion = st.number_input(
+                    _t('log_portion_g_label'),
+                    min_value=0.0,
+                    max_value=1000.0,
+                    value=default_portion,
+                    step=10.0,
+                    key=f"add_portion_input_{meal_type}",
+                    label_visibility="collapsed"
+                )
+            
+            # If Custom, display a row underneath for macros inputs
+            if custom_fields_active:
+                st.markdown("<div style='font-size:0.85rem; color:#64748b; margin-bottom:0.2rem;'>Nutrient Densities (g/100g) / Пищевая ценность (г/100г)</div>", unsafe_allow_html=True)
+                col_custom_p, col_custom_c, col_custom_f = st.columns(3)
+                with col_custom_p:
+                    c_prot = st.number_input(_t('custom_protein_label'), min_value=0.0, max_value=100.0, value=10.0, step=0.5, key=f"custom_prot_{meal_type}")
+                with col_custom_c:
+                    c_carb = st.number_input(_t('custom_carbs_label'), min_value=0.0, max_value=100.0, value=0.0, step=0.5, key=f"custom_carb_{meal_type}")
+                with col_custom_f:
+                    c_fat = st.number_input(_t('custom_fat_label'), min_value=0.0, max_value=100.0, value=0.0, step=0.5, key=f"custom_fat_{meal_type}")
+            
+            with col_add_btn:
+                if st.button(_t('log_add_item_btn'), key=f"add_btn_{meal_type}", use_container_width=True, type="secondary"):
+                    if custom_fields_active:
+                        clean_custom_name = custom_name.strip()
+                        if not clean_custom_name:
+                            st.error("Please enter a custom name!" if lang == 'en' else "Введите название продукта!")
+                        else:
+                            # Save custom food to DB
+                            db.add_food_to_db(clean_custom_name, "Other", c_prot, c_carb, c_fat)
+                            # Update active cache
+                            if clean_custom_name not in st.session_state.others_db:
+                                st.session_state.others_db.append(clean_custom_name)
+                            st.session_state.food_macros[clean_custom_name] = {
+                                'protein': c_prot,
+                                'carbs': c_carb,
+                                'fat': c_fat
+                            }
+                            # Log entry
+                            db.add_food_log_entry(
+                                date_str=date_str,
+                                meal_type=meal_type,
+                                food_name=clean_custom_name,
+                                garnish_name="None",
+                                food_portion=food_portion,
+                                garnish_portion=0.0
+                            )
+                            st.success(_t('log_success_msg'))
+                            st.rerun()
+                    else:
+                        if food_select != "None":
+                            db.add_food_log_entry(
+                                date_str=date_str,
+                                meal_type=meal_type,
+                                food_name=food_select,
+                                garnish_name="None",
+                                food_portion=food_portion,
+                                garnish_portion=0.0
+                            )
+                            st.success(_t('log_success_msg'))
+                            st.rerun()
+
+    st.markdown("---")
+    
+    # 3. Daily Summary Totals
+    unit_g = 'г' if lang == 'ru' else 'g'
+    st.markdown(f"#### {'Day Totals' if lang == 'en' else 'Итого за день'}")
+    col_t1, col_t2, col_t3 = st.columns(3)
+    with col_t1:
+        st.markdown(f"""
+        <div class="card">
+            <p class="metric-value">{day_total_p:.1f} {unit_g}</p>
+            <p class="metric-label">{'Protein' if lang == 'en' else 'Белки'}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_t2:
+        st.markdown(f"""
+        <div class="card">
+            <p class="metric-value">{day_total_c:.1f} {unit_g}</p>
+            <p class="metric-label">{'Carbs' if lang == 'en' else 'Углеводы'}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_t3:
+        st.markdown(f"""
+        <div class="card">
+            <p class="metric-value">{day_total_f:.1f} {unit_g}</p>
+            <p class="metric-label">{'Fats' if lang == 'en' else 'Жиры'}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+# ---- TAB 3: SHOPPING LIST ----
 with tab_list:
     st.markdown(_t('shopping_list_title'))
     st.write(_t('shopping_list_desc'))
@@ -664,58 +913,86 @@ with tab_list:
 
 # ---- TAB 3: STATISTICS & ANALYTICS ----
 with tab_stats:
-    st.markdown(_t('stats_title'))
+    st.markdown(_t('stats_actual_title'))
     
-    # Calculations
-    total_weekly_p = 0.0
-    total_weekly_c = 0.0
-    total_weekly_f = 0.0
+    import datetime
+    today = datetime.date.today()
+    default_start = today - datetime.timedelta(days=6)
+    
+    col_start, col_end = st.columns(2)
+    with col_start:
+        start_date = st.date_input("Start Date" if lang == 'en' else "Начальная дата", default_start, key="stats_start_date_input")
+    with col_end:
+        end_date = st.date_input("End Date" if lang == 'en' else "Конечная дата", today, key="stats_end_date_input")
+        
+    start_str = start_date.strftime("%Y-%m-%d")
+    end_str = end_date.strftime("%Y-%m-%d")
+    
+    # Fetch actual log entries in range
+    logs_in_range = db.get_actual_intake_in_range(start_str, end_str)
+    
+    # Generate list of all dates in the range to display 0 on empty days
+    delta = end_date - start_date
+    if delta.days >= 0:
+        all_dates = [start_date + datetime.timedelta(days=i) for i in range(delta.days + 1)]
+    else:
+        all_dates = [start_date]
+        
+    logs_by_date = {d.strftime("%Y-%m-%d"): [] for d in all_dates}
+    for entry in logs_in_range:
+        e_date = entry['date']
+        if e_date in logs_by_date:
+            logs_by_date[e_date].append(entry)
+            
+    total_p = 0.0
+    total_c = 0.0
+    total_f = 0.0
     daily_macros_data = []
     
-    for day in days_of_week:
+    for d_str in sorted(logs_by_date.keys()):
         day_p = 0.0
         day_c = 0.0
         day_f = 0.0
         
-        # 1. Main meals
-        for meal in ["Завтрак", "Обед", "Ужин"]:
-            p = st.session_state.meal_plan[day][meal]["protein"]
-            g = st.session_state.meal_plan[day][meal]["garnish"]
+        for entry in logs_by_date[d_str]:
+            f_name = entry['food_name']
+            g_name = entry['garnish_name']
+            f_port = entry['food_portion']
+            g_port = entry['garnish_portion']
             
-            if p != "None" and p in st.session_state.food_macros:
-                day_p += (protein_portion / 100.0) * st.session_state.food_macros[p]['protein']
-                day_c += (protein_portion / 100.0) * st.session_state.food_macros[p]['carbs']
-                day_f += (protein_portion / 100.0) * st.session_state.food_macros[p]['fat']
-            
-            if g != "None" and g in st.session_state.food_macros:
-                day_p += (garnish_portion / 100.0) * st.session_state.food_macros[g]['protein']
-                day_c += (garnish_portion / 100.0) * st.session_state.food_macros[g]['carbs']
-                day_f += (garnish_portion / 100.0) * st.session_state.food_macros[g]['fat']
-        
-        # 2. Snacks
-        for snack_type in ["Снэк 1", "Снэк 2"]:
-            s = st.session_state.meal_plan[day][snack_type]["snack"]
-            if s != "None" and s in st.session_state.food_macros:
-                day_p += (snack_portion / 100.0) * st.session_state.food_macros[s]['protein']
-                day_c += (snack_portion / 100.0) * st.session_state.food_macros[s]['carbs']
-                day_f += (snack_portion / 100.0) * st.session_state.food_macros[s]['fat']
+            if f_name != "None" and f_name in st.session_state.food_macros:
+                f_macro = st.session_state.food_macros[f_name]
+                day_p += f_macro['protein'] * f_port / 100.0
+                day_c += f_macro['carbs'] * f_port / 100.0
+                day_f += f_macro['fat'] * f_port / 100.0
                 
-        total_weekly_p += day_p
-        total_weekly_c += day_c
-        total_weekly_f += day_f
+            if g_name != "None" and g_name in st.session_state.food_macros:
+                g_macro = st.session_state.food_macros[g_name]
+                day_p += g_macro['protein'] * g_port / 100.0
+                day_c += g_macro['carbs'] * g_port / 100.0
+                day_f += g_macro['fat'] * g_port / 100.0
+                
+        total_p += day_p
+        total_c += day_c
+        total_f += day_f
         
-        # Localize day name for index display
-        localized_day = translations.get("days", {}).get(day, day)
+        # Format date for index display
         daily_macros_data.append({
-            _t('day_label_column'): localized_day,
+            _t('day_label_column'): d_str,
             'Protein' if lang == 'en' else 'Белки': round(day_p, 1),
             'Carbs' if lang == 'en' else 'Углеводы': round(day_c, 1),
             'Fats' if lang == 'en' else 'Жиры': round(day_f, 1)
         })
         
-    avg_daily_p = total_weekly_p / 7.0
-    avg_daily_c = total_weekly_c / 7.0
-    avg_daily_f = total_weekly_f / 7.0
+    num_days = max(1, len(all_dates))
+    avg_daily_p = total_p / num_days
+    avg_daily_c = total_c / num_days
+    avg_daily_f = total_f / num_days
+    
+    target_protein = st.session_state.target_protein
+    target_carbs = st.session_state.target_carbs
+    target_fat = st.session_state.target_fat
+    unit_g = 'г' if lang == 'ru' else 'g'
     
     progress_p = min(1.0, avg_daily_p / target_protein) if target_protein > 0 else 0.0
     progress_c = min(1.0, avg_daily_c / target_carbs) if target_carbs > 0 else 0.0
@@ -729,7 +1006,7 @@ with tab_stats:
         st.markdown(f"""
         <div class="card">
             <p class="metric-value">{avg_daily_p:.1f} {unit_g}</p>
-            <p class="metric-label">{_t('stat_card_avg')}</p>
+            <p class="metric-label">{_t('stat_card_avg_protein')}</p>
         </div>
         """, unsafe_allow_html=True)
         st.markdown(f"**Goal: {target_protein}{unit_g} ({progress_p*100:.0f}%)**" if lang == 'en' else f"**Цель: {target_protein}{unit_g} ({progress_p*100:.0f}%)**")
@@ -746,7 +1023,7 @@ with tab_stats:
         st.markdown(f"""
         <div class="card">
             <p class="metric-value">{avg_daily_c:.1f} {unit_g}</p>
-            <p class="metric-label">{_t('stat_card_avg')}</p>
+            <p class="metric-label">{_t('stat_card_avg_carbs')}</p>
         </div>
         """, unsafe_allow_html=True)
         st.markdown(f"**Goal: {target_carbs}{unit_g} ({progress_c*100:.0f}%)**" if lang == 'en' else f"**Цель: {target_carbs}{unit_g} ({progress_c*100:.0f}%)**")
@@ -763,7 +1040,7 @@ with tab_stats:
         st.markdown(f"""
         <div class="card">
             <p class="metric-value">{avg_daily_f:.1f} {unit_g}</p>
-            <p class="metric-label">{_t('stat_card_avg')}</p>
+            <p class="metric-label">{_t('stat_card_avg_fats')}</p>
         </div>
         """, unsafe_allow_html=True)
         st.markdown(f"**Goal: {target_fat}{unit_g} ({progress_f*100:.0f}%)**" if lang == 'en' else f"**Цель: {target_fat}{unit_g} ({progress_f*100:.0f}%)**")
@@ -775,10 +1052,210 @@ with tab_stats:
         else:
             st.error("🔴 Below goal" if lang == 'en' else "🔴 Ниже нормы")
 
-    # Chart
-    st.markdown(_t('chart_header'))
-    df_daily = pd.DataFrame(daily_macros_data)
-    st.bar_chart(df_daily.set_index(_t('day_label_column')))
+    import altair as alt
+
+    # 1. Weight & GLP-1 Injections Chart
+    st.markdown("### " + ("📈 Weight & GLP-1 Injections" if lang == 'en' else "📈 Вес и инъекции GLP-1"))
+    
+    # Get weight history
+    weight_hist = db.get_weight_history()
+    weight_by_date = {d: w for d, w in weight_hist}
+    
+    # Find last weight recorded before start date for forward fill
+    last_weight = 0.0
+    for d_str, w_val in weight_hist:
+        if d_str < start_str:
+            last_weight = w_val
+        else:
+            break
+            
+    filled_weight_by_date = {}
+    for d in all_dates:
+        d_str = d.strftime("%Y-%m-%d")
+        if d_str in weight_by_date:
+            last_weight = weight_by_date[d_str]
+        filled_weight_by_date[d_str] = last_weight
+
+    weight_records = []
+    for d in all_dates:
+        d_str = d.strftime("%Y-%m-%d")
+        w_val = filled_weight_by_date.get(d_str, 0.0)
+        if w_val > 0:
+            weight_records.append({'Date': d_str, 'Weight': w_val})
+            
+    df_w = pd.DataFrame(weight_records)
+    
+    # Get injection history
+    inj_hist = db.get_injection_history()
+    inj_records = []
+    for entry in inj_hist:
+        d_str = entry[1]
+        if start_str <= d_str <= end_str:
+            med = entry[2]
+            dose = entry[3]
+            med_short = med.split(" ")[0] if med else ""
+            label = f"{dose} mg"
+            tooltip_text = f"{med_short} {dose} mg" if med_short else f"{dose} mg"
+            inj_records.append({'Date': d_str, 'Label': label, 'Tooltip': tooltip_text})
+            
+    df_inj = pd.DataFrame(inj_records)
+    
+    if not df_w.empty:
+        # Weight line layer
+        weight_line = alt.Chart(df_w).mark_line(
+            color='#3B82F6',
+            strokeWidth=3,
+            interpolate='monotone'
+        ).encode(
+            x=alt.X('Date:T', title="Date" if lang == 'en' else "Дата"),
+            y=alt.Y('Weight:Q', scale=alt.Scale(zero=False), title="Weight (kg)" if lang == 'en' else "Вес (кг)"),
+            tooltip=[
+                alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
+                alt.Tooltip('Weight:Q', title="Weight (kg)" if lang == 'en' else "Вес (кг)", format=".1f")
+            ]
+        )
+        
+        # Weight point markers
+        weight_points = alt.Chart(df_w).mark_point(
+            color='#3B82F6',
+            size=40,
+            filled=True
+        ).encode(
+            x=alt.X('Date:T'),
+            y=alt.Y('Weight:Q'),
+            tooltip=[
+                alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
+                alt.Tooltip('Weight:Q', title="Weight (kg)" if lang == 'en' else "Вес (кг)", format=".1f")
+            ]
+        )
+        
+        layers = [weight_line, weight_points]
+        
+        if not df_inj.empty:
+            # Injection event dots on the X-axis (at the bottom)
+            inj_dots = alt.Chart(df_inj).mark_point(
+                color='#EF4444',
+                size=120,
+                shape='circle',
+                filled=True
+            ).encode(
+                x=alt.X('Date:T'),
+                y=alt.value(280),
+                tooltip=[
+                    alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
+                    alt.Tooltip('Tooltip:N', title="Injection" if lang == 'en' else "Инъекция")
+                ]
+            )
+            
+            inj_text = alt.Chart(df_inj).mark_text(
+                align='center',
+                baseline='bottom',
+                dy=-10,
+                color='#EF4444',
+                fontSize=10,
+                fontWeight='bold'
+            ).encode(
+                x=alt.X('Date:T'),
+                y=alt.value(280),
+                text='Label:N'
+            )
+            layers.extend([inj_dots, inj_text])
+            
+        chart_w_inj = alt.layer(*layers).properties(
+            height=300
+        ).interactive(bind_y=False)
+        st.altair_chart(chart_w_inj, use_container_width=True)
+    else:
+        st.info("No weight logs available in this date range." if lang == 'en' else "Нет данных о весе за этот период.")
+
+    # 2. Proteins Chart
+    st.markdown("---")
+    st.markdown("### " + ("🥩 Daily Protein Intake" if lang == 'en' else "🥩 Суточное потребление белка"))
+    
+    p_records = []
+    for entry in daily_macros_data:
+        p_records.append({
+            'Date': entry[_t('day_label_column')],
+            'Protein': entry['Protein' if lang == 'en' else 'Белки']
+        })
+    df_p = pd.DataFrame(p_records)
+    
+    if not df_p.empty:
+        bar_p = alt.Chart(df_p).mark_bar(color='#10B981', opacity=0.85).encode(
+            x=alt.X('Date:T', title="Date" if lang == 'en' else "Дата"),
+            y=alt.Y('Protein:Q', title="Protein (g)" if lang == 'en' else "Белок (г)"),
+            tooltip=[
+                alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
+                alt.Tooltip('Protein:Q', title="Protein (g)" if lang == 'en' else "Белок (г)", format=".1f")
+            ]
+        )
+        
+        # Horizontal target rule
+        goal_df_p = pd.DataFrame([{'Goal': target_protein}])
+        rule_p = alt.Chart(goal_df_p).mark_rule(
+            color='#EF4444',
+            strokeDash=[5, 5],
+            strokeWidth=2
+        ).encode(
+            y='Goal:Q',
+            tooltip=[alt.Tooltip('Goal:Q', title="Goal (g)" if lang == 'en' else "Цель (г)")]
+        )
+        
+        chart_p = alt.layer(bar_p, rule_p).properties(
+            height=250
+        ).interactive(bind_y=False)
+        st.altair_chart(chart_p, use_container_width=True)
+    else:
+        st.info("No nutrition logs available in this date range." if lang == 'en' else "Нет данных о питании за этот период.")
+
+    # 3. Calories Chart
+    st.markdown("---")
+    st.markdown("### " + ("🔥 Daily Caloric Consumption" if lang == 'en' else "🔥 Суточное потребление калорий"))
+    
+    c_records = []
+    for entry in daily_macros_data:
+        p = entry['Protein' if lang == 'en' else 'Белки']
+        c = entry['Carbs' if lang == 'en' else 'Углеводы']
+        f = entry['Fats' if lang == 'en' else 'Жиры']
+        cals = p * 4.0 + c * 4.0 + f * 9.0
+        c_records.append({
+            'Date': entry[_t('day_label_column')],
+            'Calories': round(cals, 1)
+        })
+    df_c = pd.DataFrame(c_records)
+    target_calories = target_protein * 4.0 + target_carbs * 4.0 + target_fat * 9.0
+    
+    if not df_c.empty:
+        area_c = alt.Chart(df_c).mark_area(
+            color='#D946EF',
+            opacity=0.2,
+            line={'color': '#D946EF', 'width': 3}
+        ).encode(
+            x=alt.X('Date:T', title="Date" if lang == 'en' else "Дата"),
+            y=alt.Y('Calories:Q', title="Calories (kcal)" if lang == 'en' else "Калории (ккал)"),
+            tooltip=[
+                alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
+                alt.Tooltip('Calories:Q', title="Calories (kcal)" if lang == 'en' else "Калории (ккал)", format=".1f")
+            ]
+        )
+        
+        # Horizontal target rule
+        goal_df_c = pd.DataFrame([{'Goal': target_calories}])
+        rule_c = alt.Chart(goal_df_c).mark_rule(
+            color='#EF4444',
+            strokeDash=[5, 5],
+            strokeWidth=2
+        ).encode(
+            y='Goal:Q',
+            tooltip=[alt.Tooltip('Goal:Q', title="Goal (kcal)" if lang == 'en' else "Цель (ккал)")]
+        )
+        
+        chart_c = alt.layer(area_c, rule_c).properties(
+            height=250
+        ).interactive(bind_y=False)
+        st.altair_chart(chart_c, use_container_width=True)
+    else:
+        st.info("No nutrition logs available in this date range." if lang == 'en' else "Нет данных о питании за этот период.")
 
 # ---- TAB 4: WEIGHT TRACKER ----
 with tab_weight:
@@ -971,6 +1448,107 @@ with tab_glp1:
                 if st.button(_t('delete_btn'), key=f"del_inj_{entry_id}", use_container_width=True):
                     db.delete_injection_entry(entry_id)
                     st.rerun()
+
+# ---- TAB 7: SETTINGS ----
+with tab_settings:
+    st.markdown(f"### {_t('profile_header')}")
+    
+    def save_profile(key, session_key):
+        db.update_profile_value(key, st.session_state[session_key])
+        
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        st.text_input(_t('login_label'), key="profile_username", on_change=save_profile, args=("username", "profile_username"))
+        st.text_input(_t('password_label'), type="password", key="profile_password", on_change=save_profile, args=("password", "profile_password"))
+    with col_p2:
+        st.text_input(_t('email_label'), key="profile_email", on_change=save_profile, args=("email", "profile_email"))
+        
+        gender_options = ["Male", "Female", "Other"]
+        gender_trans = {
+            "Male": _t('gender_male'),
+            "Female": _t('gender_female'),
+            "Other": _t('gender_other')
+        }
+        gender_idx = gender_options.index(st.session_state.profile_gender) if st.session_state.profile_gender in gender_options else 0
+        gender_sel = st.selectbox(_t('gender_label'), gender_options, index=gender_idx, format_func=lambda x: gender_trans.get(x, x), key="profile_gender_select")
+        if gender_sel != st.session_state.profile_gender:
+            st.session_state.profile_gender = gender_sel
+            db.update_profile_value("gender", gender_sel)
+        
+    st.divider()
+    st.markdown(f"### {_t('actions_header')}")
+    
+    col_act1, col_act2 = st.columns(2)
+    with col_act1:
+        lang_choices = {"ru": "🇷🇺 Русский", "en": "🇬🇧 English"}
+        lang_val = st.selectbox(
+            _t('lang_label'), 
+            options=list(lang_choices.keys()), 
+            format_func=lambda x: lang_choices[x],
+            index=0 if lang == 'ru' else 1,
+            key="lang_selector"
+        )
+        if lang_val != st.session_state.lang:
+            st.session_state.lang = lang_val
+            st.rerun()
+            
+    with col_act2:
+        st.write("")
+        st.write("")
+        if st.button(_t('add_product_btn'), use_container_width=True, type="primary"):
+            add_product_dialog()
+            
+    st.divider()
+    
+    # Portions
+    st.subheader(_t('portion_header'))
+    st.slider(_t('protein_portion_label'), min_value=50, max_value=400, key="protein_portion", on_change=update_portion_setting, args=("protein_portion",), step=10)
+    st.slider(_t('garnish_portion_label'), min_value=30, max_value=300, key="garnish_portion", on_change=update_portion_setting, args=("garnish_portion",), step=5)
+    st.slider(_t('snack_portion_label'), min_value=10, max_value=150, key="snack_portion", on_change=update_portion_setting, args=("snack_portion",), step=5)
+    
+    st.divider()
+    
+    # Targets/Goals
+    st.subheader(_t('goals_header'))
+    st.slider(_t('target_protein_label'), min_value=50, max_value=250, key="target_protein", on_change=update_portion_setting, args=("target_protein",), step=5)
+    st.slider(_t('target_carbs_label'), min_value=50, max_value=400, key="target_carbs", on_change=update_portion_setting, args=("target_carbs",), step=5)
+    st.slider(_t('target_fat_label'), min_value=20, max_value=150, key="target_fat", on_change=update_portion_setting, args=("target_fat",), step=5)
+    
+    st.divider()
+    
+    # Active pools
+    st.subheader("Active Pools Selection" if lang == 'en' else "Выбор пула активных продуктов")
+    col_pool1, col_pool2, col_pool3 = st.columns(3)
+    with col_pool1:
+        st.multiselect(
+            _t('select_proteins_label'), 
+            options=st.session_state.proteins_db,
+            key="active_proteins",
+            format_func=translate_food
+        )
+    with col_pool2:
+        st.multiselect(
+            _t('select_garnishes_label'), 
+            options=st.session_state.garnishes_db,
+            key="active_garnishes",
+            format_func=translate_food
+        )
+    with col_pool3:
+        st.multiselect(
+            _t('select_snacks_label'),
+            options=st.session_state.snacks_db,
+            key="active_snacks",
+            format_func=translate_food
+        )
+        
+    st.divider()
+    
+    # Extra items
+    st.subheader(_t('additional_list_header'))
+    st.text_area(_t('additional_list_header'), 
+                 placeholder=_t('additional_placeholder'),
+                 key="extra_items_input",
+                 label_visibility="collapsed")
 
 st.divider()
 st.caption(_t('footer_caption'))

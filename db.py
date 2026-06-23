@@ -147,6 +147,27 @@ def init_db():
         )
     """)
 
+    # 8. Create food_log table
+    execute_query(cursor, """
+        CREATE TABLE IF NOT EXISTS food_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            meal_type TEXT NOT NULL,
+            food_name TEXT NOT NULL,
+            garnish_name TEXT,
+            food_portion REAL NOT NULL,
+            garnish_portion REAL NOT NULL
+        )
+    """)
+
+    # 9. Create profile table
+    execute_query(cursor, """
+        CREATE TABLE IF NOT EXISTS profile (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+
     conn.commit()
 
     # Seed default foods if empty
@@ -183,10 +204,23 @@ def init_db():
             ('bread', 'Garnish', 9.0, 49.0, 3.2),
             ('baguete', 'Garnish', 9.2, 52.0, 1.5),
             ('rie bread', 'Garnish', 8.5, 48.0, 1.5),
-            ('Pita', 'Garnish', 9.0, 55.0, 1.2)
+            ('Pita', 'Garnish', 9.0, 55.0, 1.2),
+            ('Eggs L size', 'Proteins', 13.0, 1.1, 11.0),
+            ('Eggs M size', 'Proteins', 13.0, 1.1, 11.0)
         ]
         execute_many(cursor, "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density) VALUES (?, ?, ?, ?, ?)", default_foods)
         conn.commit()
+
+    # Migration check to ensure Eggs L size and Eggs M size are present in existing DB
+    for egg_name in ['Eggs L size', 'Eggs M size']:
+        execute_query(cursor, "SELECT COUNT(*) FROM foods WHERE name = ?", (egg_name,))
+        if cursor.fetchone()[0] == 0:
+            execute_query(
+                cursor,
+                "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density) VALUES (?, 'Proteins', 13.0, 1.1, 11.0)",
+                (egg_name,)
+            )
+            conn.commit()
 
 
     # Seed default meal plan if empty
@@ -465,3 +499,109 @@ def delete_injection_entry(entry_id):
     execute_query(cursor, "DELETE FROM injection_history WHERE id = ?", (entry_id,))
     conn.commit()
     conn.close()
+
+# --- Food Log Operations ---
+
+def get_food_log(date_str):
+    """Retrieve logged foods for a specific date."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    execute_query(cursor, "SELECT id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion FROM food_log WHERE date = ? ORDER BY id ASC", (date_str,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            'id': row[0],
+            'date': row[1],
+            'meal_type': row[2],
+            'food_name': row[3],
+            'garnish_name': row[4],
+            'food_portion': row[5],
+            'garnish_portion': row[6]
+        }
+        for row in rows
+    ]
+
+def add_food_log_entry(date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion):
+    """Record a logged food entry."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    execute_query(
+        cursor,
+        "INSERT INTO food_log (date, meal_type, food_name, garnish_name, food_portion, garnish_portion) VALUES (?, ?, ?, ?, ?, ?)",
+        (date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion)
+    )
+    conn.commit()
+    conn.close()
+
+def delete_food_log_entry(entry_id):
+    """Delete a food log entry."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    execute_query(cursor, "DELETE FROM food_log WHERE id = ?", (entry_id,))
+    conn.commit()
+    conn.close()
+
+def get_actual_intake_in_range(start_date_str, end_date_str):
+    """Retrieve all logged food entries in a date range (inclusive)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    execute_query(
+        cursor,
+        "SELECT id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion FROM food_log WHERE date >= ? AND date <= ? ORDER BY date ASC, id ASC",
+        (start_date_str, end_date_str)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            'id': row[0],
+            'date': row[1],
+            'meal_type': row[2],
+            'food_name': row[3],
+            'garnish_name': row[4],
+            'food_portion': row[5],
+            'garnish_portion': row[6]
+        }
+        for row in rows
+    ]
+
+# --- Profile Operations ---
+
+def get_profile_value(key, default=""):
+    """Retrieve a profile value."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    execute_query(cursor, "SELECT value FROM profile WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else default
+
+def update_profile_value(key, value):
+    """Update or insert a profile value."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    if is_postgres():
+        execute_query(
+            cursor,
+            """
+            INSERT INTO profile (key, value)
+            VALUES (?, ?)
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+            """,
+            (key, value)
+        )
+    else:
+        execute_query(
+            cursor,
+            """
+            INSERT INTO profile (key, value)
+            VALUES (?, ?)
+            ON CONFLICT (key) DO UPDATE SET value = excluded.value
+            """,
+            (key, value)
+        )
+    conn.commit()
+    conn.close()
+
+
