@@ -129,7 +129,18 @@
     "custom_name_label": "Название продукта:",
     "custom_protein_label": "Белки (г/100г):",
     "custom_carbs_label": "Углеводы (г/100г):",
-    "custom_fat_label": "Жиры (г/100г):"
+    "custom_fat_label": "Жиры (г/100г):",
+    "login_title": "🔐 Вход в систему",
+    "login_subtitle": "Пожалуйста, войдите, чтобы управлять меню и отслеживать показатели",
+    "login_button": "Войти",
+    "login_error": "Неверный email или пароль",
+    "logout_btn": "Выйти",
+    "change_pw_header": "🔒 Изменение пароля",
+    "new_password_label": "Новый пароль",
+    "confirm_password_label": "Подтвердите новый пароль",
+    "pw_change_success": "Пароль успешно изменен!",
+    "pw_change_mismatch": "Пароли не совпадают!",
+    "pw_change_empty": "Пароль не может быть пустым!"
   },
   "foods": {
     "Turkey": "Индейка",

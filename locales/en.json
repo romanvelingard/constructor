@@ -129,7 +129,18 @@
     "custom_name_label": "Product name:",
     "custom_protein_label": "Protein (g/100g):",
     "custom_carbs_label": "Carbs (g/100g):",
-    "custom_fat_label": "Fat (g/100g):"
+    "custom_fat_label": "Fat (g/100g):",
+    "login_title": "🔐 Sign In",
+    "login_subtitle": "Please log in to manage your meal plan & track nutrition",
+    "login_button": "Log In",
+    "login_error": "Invalid email or password",
+    "logout_btn": "Log Out",
+    "change_pw_header": "🔒 Change Password",
+    "new_password_label": "New Password",
+    "confirm_password_label": "Confirm New Password",
+    "pw_change_success": "Password changed successfully!",
+    "pw_change_mismatch": "Passwords do not match!",
+    "pw_change_empty": "Password cannot be empty!"
   },
   "foods": {
     "Turkey": "Turkey",

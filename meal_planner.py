@@ -5,6 +5,86 @@ import os
 import json
 import db
 
+class DBWrapper:
+    @property
+    def uid(self):
+        return st.session_state.user_id
+
+    def get_foods_by_category(self, cat):
+        return db_original.get_foods_by_category(cat)
+
+    def get_all_food_macros(self):
+        return db_original.get_all_food_macros()
+
+    def add_food_to_db(self, *args, **kwargs):
+        return db_original.add_food_to_db(*args, **kwargs)
+
+    def get_meal_plan_from_db(self):
+        return db_original.get_meal_plan_from_db(self.uid)
+
+    def update_meal_plan_in_db(self, day, meal_type, food_name, garnish_name=None):
+        return db_original.update_meal_plan_in_db(self.uid, day, meal_type, food_name, garnish_name)
+
+    def get_checked_groceries_from_db(self):
+        return db_original.get_checked_groceries_from_db(self.uid)
+
+    def set_grocery_checked_state(self, item_key, is_checked):
+        return db_original.set_grocery_checked_state(self.uid, item_key, is_checked)
+
+    def get_setting_value(self, key, default):
+        return db_original.get_setting_value(self.uid, key, default)
+
+    def update_setting_value(self, key, value):
+        return db_original.update_setting_value(self.uid, key, value)
+
+    def get_weight_history(self):
+        return db_original.get_weight_history(self.uid)
+
+    def add_weight_entry(self, date_str, weight):
+        return db_original.add_weight_entry(self.uid, date_str, weight)
+
+    def delete_weight_entry(self, date_str):
+        return db_original.delete_weight_entry(self.uid, date_str)
+
+    def get_injection_history(self):
+        return db_original.get_injection_history(self.uid)
+
+    def add_injection_entry(self, date_str, medication, dose):
+        return db_original.add_injection_entry(self.uid, date_str, medication, dose)
+
+    def delete_injection_entry(self, entry_id):
+        return db_original.delete_injection_entry(self.uid, entry_id)
+
+    def get_food_log(self, date_str):
+        return db_original.get_food_log(self.uid, date_str)
+
+    def add_food_log_entry(self, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion):
+        return db_original.add_food_log_entry(self.uid, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion)
+
+    def delete_food_log_entry(self, entry_id):
+        return db_original.delete_food_log_entry(self.uid, entry_id)
+
+    def get_actual_intake_in_range(self, start_date_str, end_date_str):
+        return db_original.get_actual_intake_in_range(self.uid, start_date_str, end_date_str)
+
+    def get_profile_value(self, key, default=""):
+        return db_original.get_profile_value(self.uid, key, default)
+
+    def update_profile_value(self, key, value):
+        return db_original.update_profile_value(self.uid, key, value)
+
+    def verify_user(self, email, password):
+        return db_original.verify_user(email, password)
+
+    def change_user_password(self, new_password):
+        return db_original.change_user_password(self.uid, new_password)
+
+    def init_db(self):
+        return db_original.init_db()
+
+db_original = db
+db = DBWrapper()
+
 # Page configuration
 st.set_page_config(
     page_title="Premium Food Planner & Shopping List",
@@ -106,6 +186,44 @@ def translate_food(key):
 # 2. State Management & Initial Database
 # We define keys in English internally to remain language-independent
 db.init_db()
+
+# Login Screen logic
+if 'authenticated' not in st.session_state or not st.session_state.authenticated:
+    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+    with col_l2:
+        with st.container(border=True):
+            st.markdown(f"<h2 style='text-align: center;'>{_t('login_title')}</h2>", unsafe_allow_html=True)
+            st.markdown(f"<p style='text-align: center; color: #64748b;'>{_t('login_subtitle')}</p>", unsafe_allow_html=True)
+            
+            # Simple language selector on login screen
+            lang_choices = {"ru": "🇷🇺 Русский", "en": "🇬🇧 English"}
+            lang_val = st.selectbox(
+                _t('lang_label'), 
+                options=list(lang_choices.keys()), 
+                format_func=lambda x: lang_choices[x],
+                index=0 if lang == 'ru' else 1,
+                key="login_lang_selector"
+            )
+            if lang_val != st.session_state.lang:
+                st.session_state.lang = lang_val
+                st.rerun()
+
+            email_input = st.text_input(_t('email_label'), key="login_email_input")
+            password_input = st.text_input(_t('password_label'), type="password", key="login_password_input")
+            
+            if st.button(_t('login_button'), use_container_width=True, type="primary"):
+                user_info = db.verify_user(email_input, password_input)
+                if user_info:
+                    st.session_state.user_id = user_info[0]
+                    st.session_state.user_email = user_info[1]
+                    st.session_state.authenticated = True
+                    # Reset db_loaded to force reloading user specific values
+                    if 'db_loaded' in st.session_state:
+                        del st.session_state.db_loaded
+                    st.rerun()
+                else:
+                    st.error(_t('login_error'))
+    st.stop()
 
 if 'db_loaded' not in st.session_state:
     st.session_state.proteins_db = db.get_foods_by_category("Proteins")
@@ -1459,10 +1577,8 @@ with tab_settings:
     col_p1, col_p2 = st.columns(2)
     with col_p1:
         st.text_input(_t('login_label'), key="profile_username", on_change=save_profile, args=("username", "profile_username"))
-        st.text_input(_t('password_label'), type="password", key="profile_password", on_change=save_profile, args=("password", "profile_password"))
-    with col_p2:
         st.text_input(_t('email_label'), key="profile_email", on_change=save_profile, args=("email", "profile_email"))
-        
+    with col_p2:
         gender_options = ["Male", "Female", "Other"]
         gender_trans = {
             "Male": _t('gender_male'),
@@ -1475,6 +1591,24 @@ with tab_settings:
             st.session_state.profile_gender = gender_sel
             db.update_profile_value("gender", gender_sel)
         
+    # Change Password Section
+    st.markdown(f"#### {_t('change_pw_header')}")
+    col_pw1, col_pw2, col_pw3 = st.columns([3, 3, 2])
+    with col_pw1:
+        new_pw = st.text_input(_t('new_password_label'), type="password", key="new_password_input")
+    with col_pw2:
+        confirm_pw = st.text_input(_t('confirm_password_label'), type="password", key="confirm_password_input")
+    with col_pw3:
+        st.write("<br>", unsafe_allow_html=True)
+        if st.button(_t('save_btn'), key="change_password_submit_btn", use_container_width=True):
+            if not new_pw:
+                st.error(_t('pw_change_empty'))
+            elif new_pw != confirm_pw:
+                st.error(_t('pw_change_mismatch'))
+            else:
+                db.change_user_password(new_pw)
+                st.success(_t('pw_change_success'))
+
     st.divider()
     st.markdown(f"### {_t('actions_header')}")
     
@@ -1490,6 +1624,11 @@ with tab_settings:
         )
         if lang_val != st.session_state.lang:
             st.session_state.lang = lang_val
+            st.rerun()
+            
+        st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+        if st.button(_t('logout_btn'), use_container_width=True):
+            st.session_state.clear()
             st.rerun()
             
     with col_act2:
