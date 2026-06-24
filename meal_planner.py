@@ -10,6 +10,20 @@ class DBWrapper:
     def uid(self):
         return st.session_state.user_id
 
+    def _get_cache(self):
+        if 'db_cache' not in st.session_state:
+            st.session_state.db_cache = {}
+        return st.session_state.db_cache
+
+    def _clear_cache(self, prefix=None):
+        cache = self._get_cache()
+        if prefix:
+            keys_to_del = [k for k in cache.keys() if k[0] == prefix]
+            for k in keys_to_del:
+                del cache[k]
+        else:
+            cache.clear()
+
     def get_foods_by_category(self, cat):
         return db_original.get_foods_by_category(cat)
 
@@ -38,34 +52,58 @@ class DBWrapper:
         return db_original.update_setting_value(self.uid, key, value)
 
     def get_weight_history(self):
-        return db_original.get_weight_history(self.uid)
+        cache = self._get_cache()
+        key = ("get_weight_history",)
+        if key not in cache:
+            cache[key] = db_original.get_weight_history(self.uid)
+        return cache[key]
 
     def add_weight_entry(self, date_str, weight):
+        self._clear_cache("get_weight_history")
         return db_original.add_weight_entry(self.uid, date_str, weight)
 
     def delete_weight_entry(self, date_str):
+        self._clear_cache("get_weight_history")
         return db_original.delete_weight_entry(self.uid, date_str)
 
     def get_injection_history(self):
-        return db_original.get_injection_history(self.uid)
+        cache = self._get_cache()
+        key = ("get_injection_history",)
+        if key not in cache:
+            cache[key] = db_original.get_injection_history(self.uid)
+        return cache[key]
 
     def add_injection_entry(self, date_str, medication, dose):
+        self._clear_cache("get_injection_history")
         return db_original.add_injection_entry(self.uid, date_str, medication, dose)
 
     def delete_injection_entry(self, entry_id):
+        self._clear_cache("get_injection_history")
         return db_original.delete_injection_entry(self.uid, entry_id)
 
     def get_food_log(self, date_str):
-        return db_original.get_food_log(self.uid, date_str)
+        cache = self._get_cache()
+        key = ("get_food_log", date_str)
+        if key not in cache:
+            cache[key] = db_original.get_food_log(self.uid, date_str)
+        return cache[key]
 
     def add_food_log_entry(self, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density=0.0, carbs_density=0.0, fat_density=0.0):
+        self._clear_cache("get_food_log")
+        self._clear_cache("get_actual_intake_in_range")
         return db_original.add_food_log_entry(self.uid, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density)
 
     def delete_food_log_entry(self, entry_id):
+        self._clear_cache("get_food_log")
+        self._clear_cache("get_actual_intake_in_range")
         return db_original.delete_food_log_entry(self.uid, entry_id)
 
     def get_actual_intake_in_range(self, start_date_str, end_date_str):
-        return db_original.get_actual_intake_in_range(self.uid, start_date_str, end_date_str)
+        cache = self._get_cache()
+        key = ("get_actual_intake_in_range", start_date_str, end_date_str)
+        if key not in cache:
+            cache[key] = db_original.get_actual_intake_in_range(self.uid, start_date_str, end_date_str)
+        return cache[key]
 
     def get_profile_value(self, key, default=""):
         return db_original.get_profile_value(self.uid, key, default)
