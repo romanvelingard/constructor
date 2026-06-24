@@ -171,7 +171,7 @@ def load_translations(lang_code):
 
 # Initialize Session State Language
 if 'lang' not in st.session_state:
-    st.session_state.lang = 'ru'
+    st.session_state.lang = 'en'
 
 lang = st.session_state.lang
 translations = load_translations(lang)
@@ -195,19 +195,6 @@ if 'authenticated' not in st.session_state or not st.session_state.authenticated
             st.markdown(f"<h2 style='text-align: center;'>{_t('login_title')}</h2>", unsafe_allow_html=True)
             st.markdown(f"<p style='text-align: center; color: #64748b;'>{_t('login_subtitle')}</p>", unsafe_allow_html=True)
             
-            # Simple language selector on login screen
-            lang_choices = {"ru": "🇷🇺 Русский", "en": "🇬🇧 English"}
-            lang_val = st.selectbox(
-                _t('lang_label'), 
-                options=list(lang_choices.keys()), 
-                format_func=lambda x: lang_choices[x],
-                index=0 if lang == 'ru' else 1,
-                key="login_lang_selector"
-            )
-            if lang_val != st.session_state.lang:
-                st.session_state.lang = lang_val
-                st.rerun()
-
             email_input = st.text_input(_t('email_label'), key="login_email_input")
             password_input = st.text_input(_t('password_label'), type="password", key="login_password_input")
             
@@ -217,6 +204,8 @@ if 'authenticated' not in st.session_state or not st.session_state.authenticated
                     st.session_state.user_id = user_info[0]
                     st.session_state.user_email = user_info[1]
                     st.session_state.authenticated = True
+                    # Load saved language from DB if available
+                    st.session_state.lang = db.get_setting_value('lang', 'en')
                     # Reset db_loaded to force reloading user specific values
                     if 'db_loaded' in st.session_state:
                         del st.session_state.db_loaded
@@ -1058,12 +1047,116 @@ with tab_list:
 
 # ---- TAB 3: STATISTICS & ANALYTICS ----
 with tab_stats:
-    st.markdown(_t('stats_actual_title'))
-    
     import datetime
     today = datetime.date.today()
-    default_start = today - datetime.timedelta(days=6)
     
+    # 1. Daily Intake Analysis Section
+    st.markdown("### 📅 " + ("Daily Actual Intake" if lang == 'en' else "Фактическое потребление за день"))
+    selected_day = st.date_input("Select Date" if lang == 'en' else "Выберите дату", today, key="stats_daily_date_input")
+    day_str = selected_day.strftime("%Y-%m-%d")
+    
+    # Fetch actual log entries for this specific day
+    daily_logs = db.get_food_log(day_str)
+    
+    day_total_p = 0.0
+    day_total_c = 0.0
+    day_total_f = 0.0
+    
+    for entry in daily_logs:
+        f_name = entry['food_name']
+        g_name = entry['garnish_name']
+        f_port = entry['food_portion']
+        g_port = entry['garnish_portion']
+        
+        p_density = entry.get('protein_density', 0.0)
+        c_density = entry.get('carbs_density', 0.0)
+        f_density = entry.get('fat_density', 0.0)
+        
+        if p_density == 0.0 and c_density == 0.0 and f_density == 0.0:
+            if f_name != "None" and f_name in st.session_state.food_macros:
+                f_macro = st.session_state.food_macros[f_name]
+                p_density = f_macro['protein']
+                c_density = f_macro['carbs']
+                f_density = f_macro['fat']
+                
+        day_total_p += p_density * f_port / 100.0
+        day_total_c += c_density * f_port / 100.0
+        day_total_f += f_density * f_port / 100.0
+            
+        if g_name != "None" and g_name in st.session_state.food_macros:
+            g_macro = st.session_state.food_macros[g_name]
+            day_total_p += g_macro['protein'] * g_port / 100.0
+            day_total_c += g_macro['carbs'] * g_port / 100.0
+            day_total_f += g_macro['fat'] * g_port / 100.0
+            
+    target_protein = st.session_state.target_protein
+    target_carbs = st.session_state.target_carbs
+    target_fat = st.session_state.target_fat
+    unit_g = 'г' if lang == 'ru' else 'g'
+    
+    progress_p_day = min(1.0, day_total_p / target_protein) if target_protein > 0 else 0.0
+    progress_c_day = min(1.0, day_total_c / target_carbs) if target_carbs > 0 else 0.0
+    progress_f_day = min(1.0, day_total_f / target_fat) if target_fat > 0 else 0.0
+    
+    col_dp, col_dc, col_df = st.columns(3)
+    
+    with col_dp:
+        st.subheader("🥩 " + ("Protein" if lang == 'en' else "Белки"))
+        st.markdown(f"""
+        <div class="card">
+            <p class="metric-value">{day_total_p:.1f} {unit_g}</p>
+            <p class="metric-label">{"Protein Intake" if lang == 'en' else "Потребление белка"}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown(f"**Goal: {target_protein}{unit_g} ({progress_p_day*100:.0f}%)**" if lang == 'en' else f"**Цель: {target_protein}{unit_g} ({progress_p_day*100:.0f}%)**")
+        st.progress(progress_p_day)
+        if day_total_p >= target_protein:
+            st.success("🎉 Met goal!" if lang == 'en' else "🎉 Норма достигнута!")
+        elif day_total_p >= target_protein * 0.8:
+            st.warning("⚠️ Near goal" if lang == 'en' else "⚠️ Около нормы")
+        else:
+            st.error("🔴 Below goal" if lang == 'en' else "🔴 Ниже нормы")
+
+    with col_dc:
+        st.subheader("🌾 " + ("Carbohydrates" if lang == 'en' else "Углеводы"))
+        st.markdown(f"""
+        <div class="card">
+            <p class="metric-value">{day_total_c:.1f} {unit_g}</p>
+            <p class="metric-label">{"Carb Intake" if lang == 'en' else "Потребление углеводов"}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown(f"**Goal: {target_carbs}{unit_g} ({progress_c_day*100:.0f}%)**" if lang == 'en' else f"**Цель: {target_carbs}{unit_g} ({progress_c_day*100:.0f}%)**")
+        st.progress(progress_c_day)
+        if day_total_c >= target_carbs:
+            st.success("🎉 Met goal!" if lang == 'en' else "🎉 Норма достигнута!")
+        elif day_total_c >= target_carbs * 0.8:
+            st.warning("⚠️ Near goal" if lang == 'en' else "⚠️ Около нормы")
+        else:
+            st.error("🔴 Below goal" if lang == 'en' else "🔴 Ниже нормы")
+
+    with col_df:
+        st.subheader("🧈 " + ("Fats" if lang == 'en' else "Жиры"))
+        st.markdown(f"""
+        <div class="card">
+            <p class="metric-value">{day_total_f:.1f} {unit_g}</p>
+            <p class="metric-label">{"Fat Intake" if lang == 'en' else "Потребление жиров"}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown(f"**Goal: {target_fat}{unit_g} ({progress_f_day*100:.0f}%)**" if lang == 'en' else f"**Цель: {target_fat}{unit_g} ({progress_f_day*100:.0f}%)**")
+        st.progress(progress_f_day)
+        if day_total_f >= target_fat:
+            st.success("🎉 Met goal!" if lang == 'en' else "🎉 Норма достигнута!")
+        elif day_total_f >= target_fat * 0.8:
+            st.warning("⚠️ Near goal" if lang == 'en' else "⚠️ Около нормы")
+        else:
+            st.error("🔴 Below goal" if lang == 'en' else "🔴 Ниже нормы")
+
+    st.markdown("---")
+    
+    # 2. Period Analysis Section
+    st.markdown("### 📊 " + ("Period Actual Intake Analysis" if lang == 'en' else "Анализ фактического потребления за период"))
+    
+    default_start = today - datetime.timedelta(days=6)
     col_start, col_end = st.columns(2)
     with col_start:
         start_date = st.date_input("Start Date" if lang == 'en' else "Начальная дата", default_start, key="stats_start_date_input")
@@ -1660,6 +1753,7 @@ with tab_settings:
         )
         if lang_val != st.session_state.lang:
             st.session_state.lang = lang_val
+            db.update_setting_value('lang', lang_val)
             st.rerun()
             
         st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
