@@ -23,6 +23,7 @@ def execute_query(cursor, sql, params=()):
     """Execute SQL query replacing SQLite placeholders with PostgreSQL ones if needed."""
     if is_postgres():
         sql = sql.replace('?', '%s')
+        sql = sql.replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'SERIAL PRIMARY KEY')
     cursor.execute(sql, params)
     return cursor
 
