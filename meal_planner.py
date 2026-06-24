@@ -1659,10 +1659,11 @@ with tab_weight:
                 alt.Tooltip(f"{_t('col_weight')}:Q", title="Weight (kg)" if lang == 'en' else "Вес (кг)", format=".1f")
             ]
         ).properties(
-            height=150
+            height=300,
+            width=500
         ).interactive(bind_y=False)
         
-        st.altair_chart(weight_timeline_chart, use_container_width=True)
+        st.altair_chart(weight_timeline_chart, use_container_width=False)
         
         # Display history table with delete button for each entry
         st.markdown(_t('weight_history_title'))
