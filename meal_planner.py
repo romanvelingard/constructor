@@ -1626,13 +1626,35 @@ with tab_weight:
     if weight_history:
         st.markdown(_t('weight_chart_title'))
         
-        # Default to 3 months (90 days) resolution for the timeline chart
-        today_dt = datetime.date.today()
-        three_months_ago = today_dt - datetime.timedelta(days=90)
-        three_months_ago_str = three_months_ago.strftime("%Y-%m-%d")
+        # Timeline Resolution Selection
+        weight_res_choices = {
+            "1M": "1 Month" if lang == 'en' else "1 месяц",
+            "3M": "3 Months" if lang == 'en' else "3 месяца",
+            "1Y": "1 Year" if lang == 'en' else "1 год"
+        }
         
-        filtered_weight_history = [entry for entry in weight_history if entry[0] >= three_months_ago_str]
-        # Fallback to show all history if no records exist in the last 90 days
+        weight_res_key = st.radio(
+            "Timeline Resolution" if lang == 'en' else "Интервал времени",
+            options=list(weight_res_choices.keys()),
+            format_func=lambda x: weight_res_choices[x],
+            index=1,
+            horizontal=True,
+            key="weight_tab_chart_resolution"
+        )
+        
+        today_dt = datetime.date.today()
+        if weight_res_key == "1M":
+            weight_start_date = today_dt - datetime.timedelta(days=30)
+        elif weight_res_key == "3M":
+            weight_start_date = today_dt - datetime.timedelta(days=90)
+        else: # "1Y"
+            weight_start_date = today_dt - datetime.timedelta(days=365)
+            
+        weight_start_str = weight_start_date.strftime("%Y-%m-%d")
+        weight_end_str = today_dt.strftime("%Y-%m-%d")
+        
+        filtered_weight_history = [entry for entry in weight_history if entry[0] >= weight_start_str]
+        # Fallback to show all history if no records exist in the range
         if not filtered_weight_history:
             filtered_weight_history = weight_history
             
@@ -1643,7 +1665,7 @@ with tab_weight:
             strokeWidth=3,
             interpolate='monotone'
         ).encode(
-            x=alt.X(f"{_t('col_date')}:T", timeUnit='yearmonthdate', scale=alt.Scale(domain=[three_months_ago_str, today_dt.strftime("%Y-%m-%d")]), title="Date" if lang == 'en' else "Дата", axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+            x=alt.X(f"{_t('col_date')}:T", timeUnit='yearmonthdate', scale=alt.Scale(domain=[weight_start_str, weight_end_str]), title="Date" if lang == 'en' else "Дата", axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
             y=alt.Y(f"{_t('col_weight')}:Q", scale=alt.Scale(zero=False), title="Weight (kg)" if lang == 'en' else "Вес (кг)"),
             tooltip=[
                 alt.Tooltip(f"{_t('col_date')}:T", title="Date" if lang == 'en' else "Дата"),
