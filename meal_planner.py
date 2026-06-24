@@ -1634,8 +1634,35 @@ with tab_weight:
     # 3. Chart and History table
     if weight_history:
         st.markdown(_t('weight_chart_title'))
-        df_weight = pd.DataFrame(weight_history, columns=[_t('col_date'), _t('col_weight')])
-        st.line_chart(df_weight.set_index(_t('col_date')), y=_t('col_weight'))
+        
+        # Default to 3 months (90 days) resolution for the timeline chart
+        today_dt = datetime.date.today()
+        three_months_ago = today_dt - datetime.timedelta(days=90)
+        three_months_ago_str = three_months_ago.strftime("%Y-%m-%d")
+        
+        filtered_weight_history = [entry for entry in weight_history if entry[0] >= three_months_ago_str]
+        # Fallback to show all history if no records exist in the last 90 days
+        if not filtered_weight_history:
+            filtered_weight_history = weight_history
+            
+        df_weight = pd.DataFrame(filtered_weight_history, columns=[_t('col_date'), _t('col_weight')])
+        
+        weight_timeline_chart = alt.Chart(df_weight).mark_line(
+            color='#3B82F6',
+            strokeWidth=3,
+            interpolate='monotone'
+        ).encode(
+            x=alt.X(f"{_t('col_date')}:T", timeUnit='yearmonthdate', title="Date" if lang == 'en' else "Дата", axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+            y=alt.Y(f"{_t('col_weight')}:Q", scale=alt.Scale(zero=False), title="Weight (kg)" if lang == 'en' else "Вес (кг)"),
+            tooltip=[
+                alt.Tooltip(f"{_t('col_date')}:T", title="Date" if lang == 'en' else "Дата"),
+                alt.Tooltip(f"{_t('col_weight')}:Q", title="Weight (kg)" if lang == 'en' else "Вес (кг)", format=".1f")
+            ]
+        ).properties(
+            height=150
+        ).interactive(bind_y=False)
+        
+        st.altair_chart(weight_timeline_chart, use_container_width=True)
         
         # Display history table with delete button for each entry
         st.markdown(_t('weight_history_title'))
