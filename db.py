@@ -159,7 +159,10 @@ def init_db():
             food_name TEXT NOT NULL,
             garnish_name TEXT,
             food_portion REAL NOT NULL,
-            garnish_portion REAL NOT NULL
+            garnish_portion REAL NOT NULL,
+            protein_density REAL NOT NULL DEFAULT 0.0,
+            carbs_density REAL NOT NULL DEFAULT 0.0,
+            fat_density REAL NOT NULL DEFAULT 0.0
         )
     """)
 
@@ -174,6 +177,21 @@ def init_db():
     """)
 
     conn.commit()
+
+    # Migration: Add macro density columns to food_log
+    try:
+        execute_query(cursor, "SELECT protein_density FROM food_log LIMIT 1")
+    except Exception:
+        if is_postgres():
+            conn.rollback()
+            cursor = conn.cursor()
+        try:
+            execute_query(cursor, "ALTER TABLE food_log ADD COLUMN protein_density REAL NOT NULL DEFAULT 0.0")
+            execute_query(cursor, "ALTER TABLE food_log ADD COLUMN carbs_density REAL NOT NULL DEFAULT 0.0")
+            execute_query(cursor, "ALTER TABLE food_log ADD COLUMN fat_density REAL NOT NULL DEFAULT 0.0")
+            conn.commit()
+        except Exception:
+            pass
 
     # Seed default user if empty
     execute_query(cursor, "SELECT COUNT(*) FROM users")
@@ -545,7 +563,7 @@ def get_food_log(user_id, date_str):
     """Retrieve logged foods for a specific date and user."""
     conn = get_connection()
     cursor = conn.cursor()
-    execute_query(cursor, "SELECT id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion FROM food_log WHERE user_id = ? AND date = ? ORDER BY id ASC", (user_id, date_str))
+    execute_query(cursor, "SELECT id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density FROM food_log WHERE user_id = ? AND date = ? ORDER BY id ASC", (user_id, date_str))
     rows = cursor.fetchall()
     conn.close()
     return [
@@ -556,19 +574,22 @@ def get_food_log(user_id, date_str):
             'food_name': row[3],
             'garnish_name': row[4],
             'food_portion': row[5],
-            'garnish_portion': row[6]
+            'garnish_portion': row[6],
+            'protein_density': row[7],
+            'carbs_density': row[8],
+            'fat_density': row[9]
         }
         for row in rows
     ]
 
-def add_food_log_entry(user_id, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion):
+def add_food_log_entry(user_id, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density=0.0, carbs_density=0.0, fat_density=0.0):
     """Record a logged food entry for a user."""
     conn = get_connection()
     cursor = conn.cursor()
     execute_query(
         cursor,
-        "INSERT INTO food_log (user_id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (user_id, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion)
+        "INSERT INTO food_log (user_id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (user_id, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density)
     )
     conn.commit()
     conn.close()
@@ -587,7 +608,7 @@ def get_actual_intake_in_range(user_id, start_date_str, end_date_str):
     cursor = conn.cursor()
     execute_query(
         cursor,
-        "SELECT id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion FROM food_log WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC, id ASC",
+        "SELECT id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density FROM food_log WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC, id ASC",
         (user_id, start_date_str, end_date_str)
     )
     rows = cursor.fetchall()
@@ -600,7 +621,10 @@ def get_actual_intake_in_range(user_id, start_date_str, end_date_str):
             'food_name': row[3],
             'garnish_name': row[4],
             'food_portion': row[5],
-            'garnish_portion': row[6]
+            'garnish_portion': row[6],
+            'protein_density': row[7],
+            'carbs_density': row[8],
+            'fat_density': row[9]
         }
         for row in rows
     ]

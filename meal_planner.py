@@ -58,8 +58,8 @@ class DBWrapper:
     def get_food_log(self, date_str):
         return db_original.get_food_log(self.uid, date_str)
 
-    def add_food_log_entry(self, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion):
-        return db_original.add_food_log_entry(self.uid, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion)
+    def add_food_log_entry(self, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density=0.0, carbs_density=0.0, fat_density=0.0):
+        return db_original.add_food_log_entry(self.uid, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density)
 
     def delete_food_log_entry(self, entry_id):
         return db_original.delete_food_log_entry(self.uid, entry_id)
@@ -619,39 +619,47 @@ with tab_log:
             br_p = br.get("protein", "None")
             br_g = br.get("garnish", "None")
             if br_p != "None":
-                db.add_food_log_entry(date_str, "Завтрак", br_p, "None", float(st.session_state.protein_portion), 0.0)
+                m = st.session_state.food_macros.get(br_p, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
+                db.add_food_log_entry(date_str, "Завтрак", br_p, "None", float(st.session_state.protein_portion), 0.0, m['protein'], m['carbs'], m['fat'])
             if br_g != "None":
-                db.add_food_log_entry(date_str, "Завтрак", br_g, "None", float(st.session_state.garnish_portion), 0.0)
+                m = st.session_state.food_macros.get(br_g, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
+                db.add_food_log_entry(date_str, "Завтрак", br_g, "None", float(st.session_state.garnish_portion), 0.0, m['protein'], m['carbs'], m['fat'])
             
             # Log Snack 1
             sn1 = plan_for_day.get("Снэк 1", {})
             sn1_f = sn1.get("snack", "None")
             if sn1_f != "None":
-                db.add_food_log_entry(date_str, "Снэк 1", sn1_f, "None", float(st.session_state.snack_portion), 0.0)
+                m = st.session_state.food_macros.get(sn1_f, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
+                db.add_food_log_entry(date_str, "Снэк 1", sn1_f, "None", float(st.session_state.snack_portion), 0.0, m['protein'], m['carbs'], m['fat'])
             
             # Log Lunch
             lu = plan_for_day.get("Обед", {})
             lu_p = lu.get("protein", "None")
             lu_g = lu.get("garnish", "None")
             if lu_p != "None":
-                db.add_food_log_entry(date_str, "Обед", lu_p, "None", float(st.session_state.protein_portion), 0.0)
+                m = st.session_state.food_macros.get(lu_p, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
+                db.add_food_log_entry(date_str, "Обед", lu_p, "None", float(st.session_state.protein_portion), 0.0, m['protein'], m['carbs'], m['fat'])
             if lu_g != "None":
-                db.add_food_log_entry(date_str, "Обед", lu_g, "None", float(st.session_state.garnish_portion), 0.0)
+                m = st.session_state.food_macros.get(lu_g, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
+                db.add_food_log_entry(date_str, "Обед", lu_g, "None", float(st.session_state.garnish_portion), 0.0, m['protein'], m['carbs'], m['fat'])
                 
             # Log Snack 2
             sn2 = plan_for_day.get("Снэк 2", {})
             sn2_f = sn2.get("snack", "None")
             if sn2_f != "None":
-                db.add_food_log_entry(date_str, "Снэк 2", sn2_f, "None", float(st.session_state.snack_portion), 0.0)
+                m = st.session_state.food_macros.get(sn2_f, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
+                db.add_food_log_entry(date_str, "Снэк 2", sn2_f, "None", float(st.session_state.snack_portion), 0.0, m['protein'], m['carbs'], m['fat'])
                 
             # Log Dinner
             di = plan_for_day.get("Ужин", {})
             di_p = di.get("protein", "None")
             di_g = di.get("garnish", "None")
             if di_p != "None":
-                db.add_food_log_entry(date_str, "Ужин", di_p, "None", float(st.session_state.protein_portion), 0.0)
+                m = st.session_state.food_macros.get(di_p, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
+                db.add_food_log_entry(date_str, "Ужин", di_p, "None", float(st.session_state.protein_portion), 0.0, m['protein'], m['carbs'], m['fat'])
             if di_g != "None":
-                db.add_food_log_entry(date_str, "Ужин", di_g, "None", float(st.session_state.garnish_portion), 0.0)
+                m = st.session_state.food_macros.get(di_g, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
+                db.add_food_log_entry(date_str, "Ужин", di_g, "None", float(st.session_state.garnish_portion), 0.0, m['protein'], m['carbs'], m['fat'])
                 
             st.success(_t('log_success_msg'))
             st.rerun()
@@ -699,17 +707,20 @@ with tab_log:
                     p_val, c_val, f_val = 0.0, 0.0, 0.0
                     
                     # Compute macros
-                    if f_name != "None" and f_name in st.session_state.food_macros:
-                        f_macro = st.session_state.food_macros[f_name]
-                        p_val += f_macro['protein'] * f_port / 100.0
-                        c_val += f_macro['carbs'] * f_port / 100.0
-                        f_val += f_macro['fat'] * f_port / 100.0
-                        
-                    if g_name != "None" and g_name in st.session_state.food_macros:
-                        g_macro = st.session_state.food_macros[g_name]
-                        p_val += g_macro['protein'] * g_port / 100.0
-                        c_val += g_macro['carbs'] * g_port / 100.0
-                        f_val += g_macro['fat'] * g_port / 100.0
+                    p_density = entry.get('protein_density', 0.0)
+                    c_density = entry.get('carbs_density', 0.0)
+                    f_density = entry.get('fat_density', 0.0)
+                    
+                    if p_density == 0.0 and c_density == 0.0 and f_density == 0.0:
+                        if f_name != "None" and f_name in st.session_state.food_macros:
+                            f_macro = st.session_state.food_macros[f_name]
+                            p_density = f_macro['protein']
+                            c_density = f_macro['carbs']
+                            f_density = f_macro['fat']
+                            
+                    p_val += p_density * f_port / 100.0
+                    c_val += c_density * f_port / 100.0
+                    f_val += f_density * f_port / 100.0
                         
                     day_total_p += p_val
                     day_total_c += c_val
@@ -814,6 +825,16 @@ with tab_log:
                     c_carb = st.number_input(_t('custom_carbs_label'), min_value=0.0, max_value=100.0, value=0.0, step=0.5, key=f"custom_carb_{meal_type}")
                 with col_custom_f:
                     c_fat = st.number_input(_t('custom_fat_label'), min_value=0.0, max_value=100.0, value=0.0, step=0.5, key=f"custom_fat_{meal_type}")
+            elif food_select != "None":
+                default_macros = st.session_state.food_macros.get(food_select, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
+                st.markdown("<div style='font-size:0.85rem; color:#64748b; margin-bottom:0.2rem;'>Nutrient Densities (g/100g) / Пищевая ценность (г/100г)</div>", unsafe_allow_html=True)
+                col_pred_p, col_pred_c, col_pred_f = st.columns(3)
+                with col_pred_p:
+                    c_prot = st.number_input(_t('custom_protein_label'), min_value=0.0, max_value=100.0, value=float(default_macros['protein']), step=0.5, key=f"pred_prot_{meal_type}_{food_select}")
+                with col_pred_c:
+                    c_carb = st.number_input(_t('custom_carbs_label'), min_value=0.0, max_value=100.0, value=float(default_macros['carbs']), step=0.5, key=f"pred_carb_{meal_type}_{food_select}")
+                with col_pred_f:
+                    c_fat = st.number_input(_t('custom_fat_label'), min_value=0.0, max_value=100.0, value=float(default_macros['fat']), step=0.5, key=f"pred_fat_{meal_type}_{food_select}")
             
             with col_add_btn:
                 if st.button(_t('log_add_item_btn'), key=f"add_btn_{meal_type}", use_container_width=True, type="secondary"):
@@ -839,7 +860,10 @@ with tab_log:
                                 food_name=clean_custom_name,
                                 garnish_name="None",
                                 food_portion=food_portion,
-                                garnish_portion=0.0
+                                garnish_portion=0.0,
+                                protein_density=c_prot,
+                                carbs_density=c_carb,
+                                fat_density=c_fat
                             )
                             st.success(_t('log_success_msg'))
                             st.rerun()
@@ -851,7 +875,10 @@ with tab_log:
                                 food_name=food_select,
                                 garnish_name="None",
                                 food_portion=food_portion,
-                                garnish_portion=0.0
+                                garnish_portion=0.0,
+                                protein_density=c_prot,
+                                carbs_density=c_carb,
+                                fat_density=c_fat
                             )
                             st.success(_t('log_success_msg'))
                             st.rerun()
@@ -1078,11 +1105,20 @@ with tab_stats:
             f_port = entry['food_portion']
             g_port = entry['garnish_portion']
             
-            if f_name != "None" and f_name in st.session_state.food_macros:
-                f_macro = st.session_state.food_macros[f_name]
-                day_p += f_macro['protein'] * f_port / 100.0
-                day_c += f_macro['carbs'] * f_port / 100.0
-                day_f += f_macro['fat'] * f_port / 100.0
+            p_density = entry.get('protein_density', 0.0)
+            c_density = entry.get('carbs_density', 0.0)
+            f_density = entry.get('fat_density', 0.0)
+            
+            if p_density == 0.0 and c_density == 0.0 and f_density == 0.0:
+                if f_name != "None" and f_name in st.session_state.food_macros:
+                    f_macro = st.session_state.food_macros[f_name]
+                    p_density = f_macro['protein']
+                    c_density = f_macro['carbs']
+                    f_density = f_macro['fat']
+                    
+            day_p += p_density * f_port / 100.0
+            day_c += c_density * f_port / 100.0
+            day_f += f_density * f_port / 100.0
                 
             if g_name != "None" and g_name in st.session_state.food_macros:
                 g_macro = st.session_state.food_macros[g_name]
