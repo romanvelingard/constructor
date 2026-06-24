@@ -1339,6 +1339,36 @@ with tab_stats:
     # 1. Weight & GLP-1 Injections Chart
     st.markdown("### " + ("📈 Weight & GLP-1 Injections" if lang == 'en' else "📈 Вес и инъекции GLP-1"))
     
+    # Get timeline resolution selection
+    res_choices = {
+        "1M": "1 Month" if lang == 'en' else "1 месяц",
+        "3M": "3 Months" if lang == 'en' else "3 месяца",
+        "1Y": "1 Year" if lang == 'en' else "1 год"
+    }
+    
+    res_key = st.radio(
+        "Timeline Resolution" if lang == 'en' else "Интервал времени",
+        options=list(res_choices.keys()),
+        format_func=lambda x: res_choices[x],
+        index=1,
+        horizontal=True,
+        key="weight_chart_resolution"
+    )
+    
+    today_dt = datetime.date.today()
+    if res_key == "1M":
+        weight_start_date = today_dt - datetime.timedelta(days=30)
+    elif res_key == "3M":
+        weight_start_date = today_dt - datetime.timedelta(days=90)
+    else:  # "1Y"
+        weight_start_date = today_dt - datetime.timedelta(days=365)
+        
+    weight_start_str = weight_start_date.strftime("%Y-%m-%d")
+    weight_end_str = today_dt.strftime("%Y-%m-%d")
+    
+    delta_w = today_dt - weight_start_date
+    weight_dates = [weight_start_date + datetime.timedelta(days=i) for i in range(delta_w.days + 1)]
+    
     # Get weight history
     weight_hist = db.get_weight_history()
     weight_by_date = {d: w for d, w in weight_hist}
@@ -1346,20 +1376,20 @@ with tab_stats:
     # Find last weight recorded before start date for forward fill
     last_weight = 0.0
     for d_str, w_val in weight_hist:
-        if d_str < start_str:
+        if d_str < weight_start_str:
             last_weight = w_val
         else:
             break
             
     filled_weight_by_date = {}
-    for d in all_dates:
+    for d in weight_dates:
         d_str = d.strftime("%Y-%m-%d")
         if d_str in weight_by_date:
             last_weight = weight_by_date[d_str]
         filled_weight_by_date[d_str] = last_weight
 
     weight_records = []
-    for d in all_dates:
+    for d in weight_dates:
         d_str = d.strftime("%Y-%m-%d")
         w_val = filled_weight_by_date.get(d_str, 0.0)
         if w_val > 0:
@@ -1372,7 +1402,7 @@ with tab_stats:
     inj_records = []
     for entry in inj_hist:
         d_str = entry[1]
-        if start_str <= d_str <= end_str:
+        if weight_start_str <= d_str <= weight_end_str:
             med = entry[2]
             dose = entry[3]
             med_short = med.split(" ")[0] if med else ""
@@ -1389,7 +1419,7 @@ with tab_stats:
             strokeWidth=3,
             interpolate='monotone'
         ).encode(
-            x=alt.X('Date:T', title="Date" if lang == 'en' else "Дата"),
+            x=alt.X('Date:T', title="Date" if lang == 'en' else "Дата", axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
             y=alt.Y('Weight:Q', scale=alt.Scale(zero=False), title="Weight (kg)" if lang == 'en' else "Вес (кг)"),
             tooltip=[
                 alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
@@ -1403,7 +1433,7 @@ with tab_stats:
             size=40,
             filled=True
         ).encode(
-            x=alt.X('Date:T'),
+            x=alt.X('Date:T', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
             y=alt.Y('Weight:Q'),
             tooltip=[
                 alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
@@ -1414,15 +1444,15 @@ with tab_stats:
         layers = [weight_line, weight_points]
         
         if not df_inj.empty:
-            # Injection event dots on the X-axis (at the bottom)
+            # Injection event dots on the X-axis (at the bottom of collapsed height 220)
             inj_dots = alt.Chart(df_inj).mark_point(
                 color='#EF4444',
                 size=120,
                 shape='circle',
                 filled=True
             ).encode(
-                x=alt.X('Date:T'),
-                y=alt.value(280),
+                x=alt.X('Date:T', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+                y=alt.value(200),
                 tooltip=[
                     alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
                     alt.Tooltip('Tooltip:N', title="Injection" if lang == 'en' else "Инъекция")
@@ -1437,14 +1467,14 @@ with tab_stats:
                 fontSize=10,
                 fontWeight='bold'
             ).encode(
-                x=alt.X('Date:T'),
-                y=alt.value(280),
+                x=alt.X('Date:T', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+                y=alt.value(200),
                 text='Label:N'
             )
             layers.extend([inj_dots, inj_text])
             
         chart_w_inj = alt.layer(*layers).properties(
-            height=300
+            height=220
         ).interactive(bind_y=False)
         st.altair_chart(chart_w_inj, use_container_width=True)
     else:
