@@ -1085,6 +1085,32 @@ with tab_stats:
     import datetime
     today = datetime.date.today()
     
+    # Global Timeline Resolution Selection for all calculations and charts on this tab
+    res_choices = {
+        "1M": "1 Month" if lang == 'en' else "1 месяц",
+        "3M": "3 Months" if lang == 'en' else "3 месяца",
+        "1Y": "1 Year" if lang == 'en' else "1 год"
+    }
+    
+    res_key = st.radio(
+        "Timeline Resolution" if lang == 'en' else "Интервал времени",
+        options=list(res_choices.keys()),
+        format_func=lambda x: res_choices[x],
+        index=1,
+        horizontal=True,
+        key="stats_timeline_resolution"
+    )
+    
+    if res_key == "1M":
+        start_date = today - datetime.timedelta(days=30)
+    elif res_key == "3M":
+        start_date = today - datetime.timedelta(days=90)
+    else:  # "1Y"
+        start_date = today - datetime.timedelta(days=365)
+        
+    start_str = start_date.strftime("%Y-%m-%d")
+    end_str = today.strftime("%Y-%m-%d")
+    
     # 1. Daily Intake Analysis Section
     st.markdown("### 📅 " + ("Daily Actual Intake" if lang == 'en' else "Фактическое потребление за день"))
     selected_day = st.date_input("Select Date" if lang == 'en' else "Выберите дату", today, key="stats_daily_date_input")
@@ -1191,25 +1217,15 @@ with tab_stats:
     # 2. Period Analysis Section
     st.markdown("### 📊 " + ("Period Actual Intake Analysis" if lang == 'en' else "Анализ фактического потребления за период"))
     
-    default_start = today - datetime.timedelta(days=6)
-    col_start, col_end = st.columns(2)
-    with col_start:
-        start_date = st.date_input("Start Date" if lang == 'en' else "Начальная дата", default_start, key="stats_start_date_input")
-    with col_end:
-        end_date = st.date_input("End Date" if lang == 'en' else "Конечная дата", today, key="stats_end_date_input")
-        
-    start_str = start_date.strftime("%Y-%m-%d") if start_date else default_start.strftime("%Y-%m-%d")
-    end_str = end_date.strftime("%Y-%m-%d") if end_date else today.strftime("%Y-%m-%d")
-    
     # Fetch actual log entries in range
     logs_in_range = db.get_actual_intake_in_range(start_str, end_str)
     
     # Generate list of all dates in the range to display 0 on empty days
-    delta = (end_date - start_date) if (start_date and end_date) else (today - default_start)
+    delta = today - start_date
     if delta.days >= 0:
-        all_dates = [(start_date if start_date else default_start) + datetime.timedelta(days=i) for i in range(delta.days + 1)]
+        all_dates = [start_date + datetime.timedelta(days=i) for i in range(delta.days + 1)]
     else:
-        all_dates = [start_date if start_date else default_start]
+        all_dates = [start_date]
         
     logs_by_date = {d.strftime("%Y-%m-%d"): [] for d in all_dates}
     for entry in logs_in_range:
@@ -1339,35 +1355,10 @@ with tab_stats:
     # 1. Weight & GLP-1 Injections Chart
     st.markdown("### " + ("📈 Weight & GLP-1 Injections" if lang == 'en' else "📈 Вес и инъекции GLP-1"))
     
-    # Get timeline resolution selection
-    res_choices = {
-        "1M": "1 Month" if lang == 'en' else "1 месяц",
-        "3M": "3 Months" if lang == 'en' else "3 месяца",
-        "1Y": "1 Year" if lang == 'en' else "1 год"
-    }
-    
-    res_key = st.radio(
-        "Timeline Resolution" if lang == 'en' else "Интервал времени",
-        options=list(res_choices.keys()),
-        format_func=lambda x: res_choices[x],
-        index=1,
-        horizontal=True,
-        key="weight_chart_resolution"
-    )
-    
-    today_dt = datetime.date.today()
-    if res_key == "1M":
-        weight_start_date = today_dt - datetime.timedelta(days=30)
-    elif res_key == "3M":
-        weight_start_date = today_dt - datetime.timedelta(days=90)
-    else:  # "1Y"
-        weight_start_date = today_dt - datetime.timedelta(days=365)
-        
-    weight_start_str = weight_start_date.strftime("%Y-%m-%d")
-    weight_end_str = today_dt.strftime("%Y-%m-%d")
-    
-    delta_w = today_dt - weight_start_date
-    weight_dates = [weight_start_date + datetime.timedelta(days=i) for i in range(delta_w.days + 1)]
+    weight_start_date = start_date
+    weight_start_str = start_str
+    weight_end_str = end_str
+    weight_dates = all_dates
     
     # Get weight history
     weight_hist = db.get_weight_history()
@@ -1494,7 +1485,7 @@ with tab_stats:
     
     if not df_p.empty:
         bar_p = alt.Chart(df_p).mark_bar(color='#10B981', opacity=0.85).encode(
-            x=alt.X('Date:T', title="Date" if lang == 'en' else "Дата"),
+            x=alt.X('Date:T', timeUnit='yearmonthdate', scale=alt.Scale(domain=[start_str, end_str]), title="Date" if lang == 'en' else "Дата", axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
             y=alt.Y('Protein:Q', title="Protein (g)" if lang == 'en' else "Белок (г)"),
             tooltip=[
                 alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
@@ -1543,7 +1534,7 @@ with tab_stats:
             opacity=0.2,
             line={'color': '#D946EF', 'width': 3}
         ).encode(
-            x=alt.X('Date:T', title="Date" if lang == 'en' else "Дата"),
+            x=alt.X('Date:T', timeUnit='yearmonthdate', scale=alt.Scale(domain=[start_str, end_str]), title="Date" if lang == 'en' else "Дата", axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
             y=alt.Y('Calories:Q', title="Calories (kcal)" if lang == 'en' else "Калории (ккал)"),
             tooltip=[
                 alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
