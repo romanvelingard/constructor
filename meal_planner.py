@@ -17,12 +17,7 @@ class DBWrapper:
 
     def _clear_cache(self, prefix=None):
         cache = self._get_cache()
-        if prefix:
-            keys_to_del = [k for k in cache.keys() if k[0] == prefix]
-            for k in keys_to_del:
-                del cache[k]
-        else:
-            cache.clear()
+        cache.clear()
 
     def get_foods_by_category(self, cat):
         return db_original.get_foods_by_category(cat)
@@ -223,7 +218,9 @@ def translate_food(key):
 
 # 2. State Management & Initial Database
 # We define keys in English internally to remain language-independent
-db.init_db()
+if 'db_initialized' not in st.session_state:
+    db.init_db()
+    st.session_state.db_initialized = True
 
 # Login Screen logic
 if 'authenticated' not in st.session_state or not st.session_state.authenticated:
@@ -629,7 +626,7 @@ with tab_log:
     col_date, col_action_btn = st.columns([1, 1])
     with col_date:
         log_date = st.date_input(_t('log_date_label'), key="food_log_date_input")
-        date_str = log_date.strftime("%Y-%m-%d")
+        date_str = log_date.strftime("%Y-%m-%d") if log_date else datetime.date.today().strftime("%Y-%m-%d")
     with col_action_btn:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button(_t('log_copy_plan_btn'), use_container_width=True):
@@ -638,7 +635,7 @@ with tab_log:
                 db.delete_food_log_entry(entry['id'])
             
             # Map date to weekday
-            day_name = log_date.strftime('%A')
+            day_name = log_date.strftime('%A') if log_date else datetime.date.today().strftime('%A')
             plan_for_day = st.session_state.meal_plan.get(day_name, {})
             
             # Log Breakfast
@@ -1091,7 +1088,7 @@ with tab_stats:
     # 1. Daily Intake Analysis Section
     st.markdown("### 📅 " + ("Daily Actual Intake" if lang == 'en' else "Фактическое потребление за день"))
     selected_day = st.date_input("Select Date" if lang == 'en' else "Выберите дату", today, key="stats_daily_date_input")
-    day_str = selected_day.strftime("%Y-%m-%d")
+    day_str = selected_day.strftime("%Y-%m-%d") if selected_day else today.strftime("%Y-%m-%d")
     
     # Fetch actual log entries for this specific day
     daily_logs = db.get_food_log(day_str)
@@ -1201,18 +1198,18 @@ with tab_stats:
     with col_end:
         end_date = st.date_input("End Date" if lang == 'en' else "Конечная дата", today, key="stats_end_date_input")
         
-    start_str = start_date.strftime("%Y-%m-%d")
-    end_str = end_date.strftime("%Y-%m-%d")
+    start_str = start_date.strftime("%Y-%m-%d") if start_date else default_start.strftime("%Y-%m-%d")
+    end_str = end_date.strftime("%Y-%m-%d") if end_date else today.strftime("%Y-%m-%d")
     
     # Fetch actual log entries in range
     logs_in_range = db.get_actual_intake_in_range(start_str, end_str)
     
     # Generate list of all dates in the range to display 0 on empty days
-    delta = end_date - start_date
+    delta = (end_date - start_date) if (start_date and end_date) else (today - default_start)
     if delta.days >= 0:
-        all_dates = [start_date + datetime.timedelta(days=i) for i in range(delta.days + 1)]
+        all_dates = [(start_date if start_date else default_start) + datetime.timedelta(days=i) for i in range(delta.days + 1)]
     else:
-        all_dates = [start_date]
+        all_dates = [start_date if start_date else default_start]
         
     logs_by_date = {d.strftime("%Y-%m-%d"): [] for d in all_dates}
     for entry in logs_in_range:
@@ -1559,7 +1556,7 @@ with tab_weight:
             # Date Picker
             import datetime
             w_date = st.date_input(_t('weight_date_label'), value=datetime.date.today(), key="w_date_input")
-            w_date_str = w_date.strftime("%Y-%m-%d")
+            w_date_str = w_date.strftime("%Y-%m-%d") if w_date else datetime.date.today().strftime("%Y-%m-%d")
             
             # Weight Input
             w_val = st.number_input(_t('weight_input_label'), min_value=30.0, max_value=250.0, value=80.0, step=0.1, format="%.1f")
@@ -1638,13 +1635,12 @@ with tab_glp1:
         with st.container(border=True):
             st.markdown("#### " + ("Log New Injection" if lang == 'en' else "Записать инъекцию"))
             
-            # Date Picker
             inj_date = st.date_input(_t('glp1_date_label'), value=datetime.date.today(), key="inj_date_input")
-            inj_date_str = inj_date.strftime("%Y-%m-%d")
+            inj_date_str = inj_date.strftime("%Y-%m-%d") if inj_date else datetime.date.today().strftime("%Y-%m-%d")
             
             # Warning for past dates
             today = datetime.date.today()
-            if inj_date < today:
+            if inj_date and inj_date < today:
                 st.warning(_t('glp1_warning_past').format(date=inj_date_str))
                 
             # Medication Selection
