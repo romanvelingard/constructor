@@ -1399,7 +1399,15 @@ with tab_stats:
             med_short = med.split(" ")[0] if med else ""
             label = f"{dose} mg"
             tooltip_text = f"{med_short} {dose} mg" if med_short else f"{dose} mg"
-            inj_records.append({'Date': d_str, 'Label': label, 'Tooltip': tooltip_text})
+            # Get the weight on this date for overlaying directly on the weight line
+            w_val = filled_weight_by_date.get(d_str, 0.0)
+            if w_val > 0:
+                inj_records.append({
+                    'Date': d_str,
+                    'Weight': w_val,
+                    'Label': label,
+                    'Tooltip': tooltip_text
+                })
             
     df_inj = pd.DataFrame(inj_records)
     
@@ -1435,7 +1443,7 @@ with tab_stats:
         layers = [weight_line, weight_points]
         
         if not df_inj.empty:
-            # Injection event dots on the X-axis (at the bottom of collapsed height 220)
+            # Injection event dots on the Weight line
             inj_dots = alt.Chart(df_inj).mark_point(
                 color='#EF4444',
                 size=120,
@@ -1443,9 +1451,10 @@ with tab_stats:
                 filled=True
             ).encode(
                 x=alt.X('Date:T', timeUnit='yearmonthdate', scale=alt.Scale(domain=[weight_start_str, weight_end_str]), axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
-                y=alt.value(200),
+                y=alt.Y('Weight:Q'),
                 tooltip=[
                     alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
+                    alt.Tooltip('Weight:Q', title="Weight (kg)" if lang == 'en' else "Вес (кг)", format=".1f"),
                     alt.Tooltip('Tooltip:N', title="Injection" if lang == 'en' else "Инъекция")
                 ]
             )
@@ -1459,7 +1468,7 @@ with tab_stats:
                 fontWeight='bold'
             ).encode(
                 x=alt.X('Date:T', timeUnit='yearmonthdate', scale=alt.Scale(domain=[weight_start_str, weight_end_str]), axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
-                y=alt.value(200),
+                y=alt.Y('Weight:Q'),
                 text='Label:N'
             )
             layers.extend([inj_dots, inj_text])
@@ -1653,12 +1662,36 @@ with tab_weight:
         weight_start_str = weight_start_date.strftime("%Y-%m-%d")
         weight_end_str = today_dt.strftime("%Y-%m-%d")
         
-        filtered_weight_history = [entry for entry in weight_history if entry[0] >= weight_start_str]
-        # Fallback to show all history if no records exist in the range
-        if not filtered_weight_history:
-            filtered_weight_history = weight_history
+        # Get weight history
+        weight_hist = db.get_weight_history()
+        weight_by_date = {d: w for d, w in weight_hist}
+        
+        delta_w = today_dt - weight_start_date
+        weight_dates = [weight_start_date + datetime.timedelta(days=i) for i in range(delta_w.days + 1)]
+        
+        # Find last weight recorded before start date for forward fill
+        last_weight = 0.0
+        for d_str, w_val in weight_hist:
+            if d_str < weight_start_str:
+                last_weight = w_val
+            else:
+                break
+                
+        filled_weight_by_date = {}
+        for d in weight_dates:
+            d_str = d.strftime("%Y-%m-%d")
+            if d_str in weight_by_date:
+                last_weight = weight_by_date[d_str]
+            filled_weight_by_date[d_str] = last_weight
             
-        df_weight = pd.DataFrame(filtered_weight_history, columns=[_t('col_date'), _t('col_weight')])
+        weight_records = []
+        for d in weight_dates:
+            d_str = d.strftime("%Y-%m-%d")
+            w_val = filled_weight_by_date.get(d_str, 0.0)
+            if w_val > 0:
+                weight_records.append({_t('col_date'): d_str, _t('col_weight'): w_val})
+                
+        df_weight = pd.DataFrame(weight_records)
         
         # Get injection history
         inj_hist = db.get_injection_history()
@@ -1671,7 +1704,15 @@ with tab_weight:
                 med_short = med.split(" ")[0] if med else ""
                 label = f"{dose} mg"
                 tooltip_text = f"{med_short} {dose} mg" if med_short else f"{dose} mg"
-                inj_records.append({'Date': d_str, 'Label': label, 'Tooltip': tooltip_text})
+                # Get the weight on this date for overlaying directly on the weight line
+                w_val = filled_weight_by_date.get(d_str, 0.0)
+                if w_val > 0:
+                    inj_records.append({
+                        _t('col_date'): d_str,
+                        _t('col_weight'): w_val,
+                        'Label': label,
+                        'Tooltip': tooltip_text
+                    })
                 
         df_inj = pd.DataFrame(inj_records)
         
@@ -1705,17 +1746,18 @@ with tab_weight:
         layers = [weight_timeline_chart, weight_points]
         
         if not df_inj.empty:
-            # Injection event dots on the X-axis (at the bottom of collapsed height 220)
+            # Injection event dots on the Weight line
             inj_dots = alt.Chart(df_inj).mark_point(
                 color='#EF4444',
                 size=120,
                 shape='circle',
                 filled=True
             ).encode(
-                x=alt.X('Date:T', timeUnit='yearmonthdate', scale=alt.Scale(domain=[weight_start_str, weight_end_str]), axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
-                y=alt.value(200),
+                x=alt.X(f"{_t('col_date')}:T", timeUnit='yearmonthdate', scale=alt.Scale(domain=[weight_start_str, weight_end_str]), axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+                y=alt.Y(f"{_t('col_weight')}:Q"),
                 tooltip=[
-                    alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
+                    alt.Tooltip(f"{_t('col_date')}:T", title="Date" if lang == 'en' else "Дата"),
+                    alt.Tooltip(f"{_t('col_weight')}:Q", title="Weight (kg)" if lang == 'en' else "Вес (кг)", format=".1f"),
                     alt.Tooltip('Tooltip:N', title="Injection" if lang == 'en' else "Инъекция")
                 ]
             )
@@ -1728,8 +1770,8 @@ with tab_weight:
                 fontSize=10,
                 fontWeight='bold'
             ).encode(
-                x=alt.X('Date:T', timeUnit='yearmonthdate', scale=alt.Scale(domain=[weight_start_str, weight_end_str]), axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
-                y=alt.value(200),
+                x=alt.X(f"{_t('col_date')}:T", timeUnit='yearmonthdate', scale=alt.Scale(domain=[weight_start_str, weight_end_str]), axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+                y=alt.Y(f"{_t('col_weight')}:Q"),
                 text='Label:N'
             )
             layers.extend([inj_dots, inj_text])
