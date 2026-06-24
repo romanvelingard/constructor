@@ -7,11 +7,23 @@ DB_FILE = "meal_planner.db"
 def is_postgres():
     """Check if PostgreSQL DATABASE_URL is configured."""
     url = os.environ.get("DATABASE_URL")
+    if not url:
+        try:
+            import streamlit as st
+            url = st.secrets.get("DATABASE_URL")
+        except Exception:
+            pass
     return bool(url and (url.startswith("postgres://") or url.startswith("postgresql://")))
 
 def get_connection():
     """Return a connection to SQLite or PostgreSQL depending on environment."""
     url = os.environ.get("DATABASE_URL")
+    if not url:
+        try:
+            import streamlit as st
+            url = st.secrets.get("DATABASE_URL")
+        except Exception:
+            pass
     if url and (url.startswith("postgres://") or url.startswith("postgresql://")):
         import psycopg2
         if url.startswith("postgres://"):
