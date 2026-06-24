@@ -1419,7 +1419,7 @@ with tab_stats:
             strokeWidth=3,
             interpolate='monotone'
         ).encode(
-            x=alt.X('Date:T', title="Date" if lang == 'en' else "Дата", axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+            x=alt.X('Date:T', timeUnit='yearmonthdate', title="Date" if lang == 'en' else "Дата", axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
             y=alt.Y('Weight:Q', scale=alt.Scale(zero=False), title="Weight (kg)" if lang == 'en' else "Вес (кг)"),
             tooltip=[
                 alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
@@ -1433,7 +1433,7 @@ with tab_stats:
             size=40,
             filled=True
         ).encode(
-            x=alt.X('Date:T', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+            x=alt.X('Date:T', timeUnit='yearmonthdate', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
             y=alt.Y('Weight:Q'),
             tooltip=[
                 alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
@@ -1451,7 +1451,7 @@ with tab_stats:
                 shape='circle',
                 filled=True
             ).encode(
-                x=alt.X('Date:T', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+                x=alt.X('Date:T', timeUnit='yearmonthdate', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
                 y=alt.value(200),
                 tooltip=[
                     alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
@@ -1467,7 +1467,7 @@ with tab_stats:
                 fontSize=10,
                 fontWeight='bold'
             ).encode(
-                x=alt.X('Date:T', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+                x=alt.X('Date:T', timeUnit='yearmonthdate', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
                 y=alt.value(200),
                 text='Label:N'
             )
