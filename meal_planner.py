@@ -1660,6 +1660,21 @@ with tab_weight:
             
         df_weight = pd.DataFrame(filtered_weight_history, columns=[_t('col_date'), _t('col_weight')])
         
+        # Get injection history
+        inj_hist = db.get_injection_history()
+        inj_records = []
+        for entry in inj_hist:
+            d_str = entry[1]
+            if weight_start_str <= d_str <= weight_end_str:
+                med = entry[2]
+                dose = entry[3]
+                med_short = med.split(" ")[0] if med else ""
+                label = f"{dose} mg"
+                tooltip_text = f"{med_short} {dose} mg" if med_short else f"{dose} mg"
+                inj_records.append({'Date': d_str, 'Label': label, 'Tooltip': tooltip_text})
+                
+        df_inj = pd.DataFrame(inj_records)
+        
         weight_timeline_chart = alt.Chart(df_weight).mark_line(
             color='#3B82F6',
             strokeWidth=3,
@@ -1671,12 +1686,59 @@ with tab_weight:
                 alt.Tooltip(f"{_t('col_date')}:T", title="Date" if lang == 'en' else "Дата"),
                 alt.Tooltip(f"{_t('col_weight')}:Q", title="Weight (kg)" if lang == 'en' else "Вес (кг)", format=".1f")
             ]
-        ).properties(
-            height=300,
-            width=500
+        )
+        
+        # Weight point markers
+        weight_points = alt.Chart(df_weight).mark_point(
+            color='#3B82F6',
+            size=40,
+            filled=True
+        ).encode(
+            x=alt.X(f"{_t('col_date')}:T", timeUnit='yearmonthdate', scale=alt.Scale(domain=[weight_start_str, weight_end_str]), axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+            y=alt.Y(f"{_t('col_weight')}:Q"),
+            tooltip=[
+                alt.Tooltip(f"{_t('col_date')}:T", title="Date" if lang == 'en' else "Дата"),
+                alt.Tooltip(f"{_t('col_weight')}:Q", title="Weight (kg)" if lang == 'en' else "Вес (кг)", format=".1f")
+            ]
+        )
+        
+        layers = [weight_timeline_chart, weight_points]
+        
+        if not df_inj.empty:
+            # Injection event dots on the X-axis (at the bottom of collapsed height 220)
+            inj_dots = alt.Chart(df_inj).mark_point(
+                color='#EF4444',
+                size=120,
+                shape='circle',
+                filled=True
+            ).encode(
+                x=alt.X('Date:T', timeUnit='yearmonthdate', scale=alt.Scale(domain=[weight_start_str, weight_end_str]), axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+                y=alt.value(200),
+                tooltip=[
+                    alt.Tooltip('Date:T', title="Date" if lang == 'en' else "Дата"),
+                    alt.Tooltip('Tooltip:N', title="Injection" if lang == 'en' else "Инъекция")
+                ]
+            )
+            
+            inj_text = alt.Chart(df_inj).mark_text(
+                align='center',
+                baseline='bottom',
+                dy=-10,
+                color='#EF4444',
+                fontSize=10,
+                fontWeight='bold'
+            ).encode(
+                x=alt.X('Date:T', timeUnit='yearmonthdate', scale=alt.Scale(domain=[weight_start_str, weight_end_str]), axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45)),
+                y=alt.value(200),
+                text='Label:N'
+            )
+            layers.extend([inj_dots, inj_text])
+            
+        chart_w_inj = alt.layer(*layers).properties(
+            height=220
         ).interactive(bind_y=False)
         
-        st.altair_chart(weight_timeline_chart, use_container_width=False)
+        st.altair_chart(chart_w_inj, use_container_width=True)
         
         # Display history table with delete button for each entry
         st.markdown(_t('weight_history_title'))
