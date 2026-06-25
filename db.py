@@ -223,6 +223,32 @@ def init_db():
         except Exception:
             pass
 
+    # Migration: Update Tuna & Salmon
+    try:
+        execute_query(cursor, "SELECT COUNT(*) FROM foods WHERE name = 'Tuna'")
+        if cursor.fetchone()[0] > 0:
+            # Delete Tuna
+            execute_query(cursor, "DELETE FROM foods WHERE name = 'Tuna'")
+            
+            # Add Canned tuna in oil
+            execute_query(cursor, "DELETE FROM foods WHERE name = 'Canned tuna in oil'")
+            execute_query(cursor, "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density, calories) VALUES (?, ?, ?, ?, ?, ?)", ("Canned tuna in oil", "Proteins", 29.1, 0.0, 8.2, 198.0))
+            
+            # Add Canned tuna in water
+            execute_query(cursor, "DELETE FROM foods WHERE name = 'Canned tuna in water'")
+            execute_query(cursor, "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density, calories) VALUES (?, ?, ?, ?, ?, ?)", ("Canned tuna in water", "Proteins", 19.4, 0.0, 1.0, 86.0))
+            
+            # Add Salmon if not exists
+            execute_query(cursor, "SELECT COUNT(*) FROM foods WHERE name = 'Salmon'")
+            if cursor.fetchone()[0] == 0:
+                execute_query(cursor, "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density, calories) VALUES (?, ?, ?, ?, ?, ?)", ("Salmon", "Proteins", 22.1, 0.0, 12.4, 206.0))
+            
+            conn.commit()
+    except Exception as e:
+        if is_postgres():
+            conn.rollback()
+            cursor = conn.cursor()
+
     # Seed default user if empty
     execute_query(cursor, "SELECT COUNT(*) FROM users")
     if cursor.fetchone()[0] == 0:
