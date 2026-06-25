@@ -345,11 +345,23 @@ def add_product_dialog():
         format="%.1f"
     )
     
+    # Calculate default calories
+    actual_density = 0.0 if category == "Garnish" else protein_density
+    default_calories = actual_density * 4.0 + carbs_density * 4.0 + fat_density * 9.0
+    
+    calories = st.number_input(
+        _t('calories_density_label'), 
+        min_value=0.0, 
+        max_value=900.0, 
+        value=default_calories, 
+        step=1.0, 
+        format="%.1f"
+    )
+    
     if st.button(_t('save_btn'), use_container_width=True):
         clean_name = name.strip()
         if clean_name:
-            actual_density = 0.0 if category == "Garnish" else protein_density
-            success = db.add_food_to_db(clean_name, category, actual_density, carbs_density, fat_density)
+            success = db.add_food_to_db(clean_name, category, actual_density, carbs_density, fat_density, calories)
             if success:
                 if category == "Proteins":
                     if clean_name not in st.session_state.proteins_db:
@@ -380,7 +392,8 @@ def add_product_dialog():
                 st.session_state.food_macros[clean_name] = {
                     'protein': actual_density,
                     'carbs': carbs_density,
-                    'fat': fat_density
+                    'fat': fat_density,
+                    'calories': calories
                 }
                 
                 st.success(_t('success_added_msg').format(name=clean_name))
@@ -518,35 +531,52 @@ with tab_menu:
                 day_protein = 0.0
                 day_carbs = 0.0
                 day_fat = 0.0
+                day_calories = 0.0
 
                 for meal_type in ["Завтрак", "Обед", "Ужин"]:
                     p = st.session_state.meal_plan[day][meal_type]["protein"]
                     g = st.session_state.meal_plan[day][meal_type]["garnish"]
                     
                     if p != "None" and p in st.session_state.food_macros:
-                        day_protein += (protein_portion / 100.0) * st.session_state.food_macros[p]['protein']
-                        day_carbs += (protein_portion / 100.0) * st.session_state.food_macros[p]['carbs']
-                        day_fat += (protein_portion / 100.0) * st.session_state.food_macros[p]['fat']
+                        macro = st.session_state.food_macros[p]
+                        day_protein += (protein_portion / 100.0) * macro['protein']
+                        day_carbs += (protein_portion / 100.0) * macro['carbs']
+                        day_fat += (protein_portion / 100.0) * macro['fat']
+                        cals_d = macro.get('calories', 0.0)
+                        if cals_d == 0.0:
+                            cals_d = macro['protein'] * 4.0 + macro['carbs'] * 4.0 + macro['fat'] * 9.0
+                        day_calories += (protein_portion / 100.0) * cals_d
                     
                     if g != "None" and g in st.session_state.food_macros:
-                        day_protein += (garnish_portion / 100.0) * st.session_state.food_macros[g]['protein']
-                        day_carbs += (garnish_portion / 100.0) * st.session_state.food_macros[g]['carbs']
-                        day_fat += (garnish_portion / 100.0) * st.session_state.food_macros[g]['fat']
+                        macro = st.session_state.food_macros[g]
+                        day_protein += (garnish_portion / 100.0) * macro['protein']
+                        day_carbs += (garnish_portion / 100.0) * macro['carbs']
+                        day_fat += (garnish_portion / 100.0) * macro['fat']
+                        cals_d = macro.get('calories', 0.0)
+                        if cals_d == 0.0:
+                            cals_d = macro['protein'] * 4.0 + macro['carbs'] * 4.0 + macro['fat'] * 9.0
+                        day_calories += (garnish_portion / 100.0) * cals_d
 
                 for snack_type in ["Снэк 1", "Снэк 2"]:
                     s = st.session_state.meal_plan[day][snack_type]["snack"]
                     if s != "None" and s in st.session_state.food_macros:
-                        day_protein += (snack_portion / 100.0) * st.session_state.food_macros[s]['protein']
-                        day_carbs += (snack_portion / 100.0) * st.session_state.food_macros[s]['carbs']
-                        day_fat += (snack_portion / 100.0) * st.session_state.food_macros[s]['fat']
+                        macro = st.session_state.food_macros[s]
+                        day_protein += (snack_portion / 100.0) * macro['protein']
+                        day_carbs += (snack_portion / 100.0) * macro['carbs']
+                        day_fat += (snack_portion / 100.0) * macro['fat']
+                        cals_d = macro.get('calories', 0.0)
+                        if cals_d == 0.0:
+                            cals_d = macro['protein'] * 4.0 + macro['carbs'] * 4.0 + macro['fat'] * 9.0
+                        day_calories += (snack_portion / 100.0) * cals_d
 
                 label_p = 'Protein' if lang == 'en' else 'Белки'
                 label_c = 'Carbs' if lang == 'en' else 'Угл'
                 label_f = 'Fats' if lang == 'en' else 'Жиры'
+                label_cal = 'Calories' if lang == 'en' else 'Ккал'
                 st.markdown(
-                    f"<span class='badge badge-protein'>{label_p}: {day_protein:.1f}g | {label_c}: {day_carbs:.1f}g | {label_f}: {day_fat:.1f}g</span>"
+                    f"<span class='badge badge-protein'>{label_p}: {day_protein:.1f}g | {label_c}: {day_carbs:.1f}g | {label_f}: {day_fat:.1f}g | {label_cal}: {day_calories:.0f}</span>"
                     if lang == 'en' else
-                    f"<span class='badge badge-protein'>Б: {day_protein:.1f}г | У: {day_carbs:.1f}г | Ж: {day_fat:.1f}г</span>",
+                    f"<span class='badge badge-protein'>Б: {day_protein:.1f}г | У: {day_carbs:.1f}г | Ж: {day_fat:.1f}г | Ккал: {day_calories:.0f}</span>",
                     unsafe_allow_html=True
                 )
 
@@ -643,47 +673,71 @@ with tab_log:
             br_p = br.get("protein", "None")
             br_g = br.get("garnish", "None")
             if br_p != "None":
-                m = st.session_state.food_macros.get(br_p, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
-                db.add_food_log_entry(date_str, "Завтрак", br_p, "None", float(st.session_state.protein_portion), 0.0, m['protein'], m['carbs'], m['fat'])
+                m = st.session_state.food_macros.get(br_p, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0, 'calories': 0.0})
+                cals_d = m.get('calories', 0.0)
+                if cals_d == 0.0:
+                    cals_d = m['protein'] * 4.0 + m['carbs'] * 4.0 + m['fat'] * 9.0
+                db.add_food_log_entry(date_str, "Завтрак", br_p, "None", float(st.session_state.protein_portion), 0.0, m['protein'], m['carbs'], m['fat'], cals_d)
             if br_g != "None":
-                m = st.session_state.food_macros.get(br_g, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
-                db.add_food_log_entry(date_str, "Завтрак", br_g, "None", float(st.session_state.garnish_portion), 0.0, m['protein'], m['carbs'], m['fat'])
+                m = st.session_state.food_macros.get(br_g, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0, 'calories': 0.0})
+                cals_d = m.get('calories', 0.0)
+                if cals_d == 0.0:
+                    cals_d = m['protein'] * 4.0 + m['carbs'] * 4.0 + m['fat'] * 9.0
+                db.add_food_log_entry(date_str, "Завтрак", br_g, "None", float(st.session_state.garnish_portion), 0.0, m['protein'], m['carbs'], m['fat'], cals_d)
             
             # Log Snack 1
             sn1 = plan_for_day.get("Снэк 1", {})
             sn1_f = sn1.get("snack", "None")
             if sn1_f != "None":
-                m = st.session_state.food_macros.get(sn1_f, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
-                db.add_food_log_entry(date_str, "Снэк 1", sn1_f, "None", float(st.session_state.snack_portion), 0.0, m['protein'], m['carbs'], m['fat'])
+                m = st.session_state.food_macros.get(sn1_f, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0, 'calories': 0.0})
+                cals_d = m.get('calories', 0.0)
+                if cals_d == 0.0:
+                    cals_d = m['protein'] * 4.0 + m['carbs'] * 4.0 + m['fat'] * 9.0
+                db.add_food_log_entry(date_str, "Снэк 1", sn1_f, "None", float(st.session_state.snack_portion), 0.0, m['protein'], m['carbs'], m['fat'], cals_d)
             
             # Log Lunch
             lu = plan_for_day.get("Обед", {})
             lu_p = lu.get("protein", "None")
             lu_g = lu.get("garnish", "None")
             if lu_p != "None":
-                m = st.session_state.food_macros.get(lu_p, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
-                db.add_food_log_entry(date_str, "Обед", lu_p, "None", float(st.session_state.protein_portion), 0.0, m['protein'], m['carbs'], m['fat'])
+                m = st.session_state.food_macros.get(lu_p, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0, 'calories': 0.0})
+                cals_d = m.get('calories', 0.0)
+                if cals_d == 0.0:
+                    cals_d = m['protein'] * 4.0 + m['carbs'] * 4.0 + m['fat'] * 9.0
+                db.add_food_log_entry(date_str, "Обед", lu_p, "None", float(st.session_state.protein_portion), 0.0, m['protein'], m['carbs'], m['fat'], cals_d)
             if lu_g != "None":
-                m = st.session_state.food_macros.get(lu_g, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
-                db.add_food_log_entry(date_str, "Обед", lu_g, "None", float(st.session_state.garnish_portion), 0.0, m['protein'], m['carbs'], m['fat'])
+                m = st.session_state.food_macros.get(lu_g, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0, 'calories': 0.0})
+                cals_d = m.get('calories', 0.0)
+                if cals_d == 0.0:
+                    cals_d = m['protein'] * 4.0 + m['carbs'] * 4.0 + m['fat'] * 9.0
+                db.add_food_log_entry(date_str, "Обед", lu_g, "None", float(st.session_state.garnish_portion), 0.0, m['protein'], m['carbs'], m['fat'], cals_d)
                 
             # Log Snack 2
             sn2 = plan_for_day.get("Снэк 2", {})
             sn2_f = sn2.get("snack", "None")
             if sn2_f != "None":
-                m = st.session_state.food_macros.get(sn2_f, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
-                db.add_food_log_entry(date_str, "Снэк 2", sn2_f, "None", float(st.session_state.snack_portion), 0.0, m['protein'], m['carbs'], m['fat'])
+                m = st.session_state.food_macros.get(sn2_f, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0, 'calories': 0.0})
+                cals_d = m.get('calories', 0.0)
+                if cals_d == 0.0:
+                    cals_d = m['protein'] * 4.0 + m['carbs'] * 4.0 + m['fat'] * 9.0
+                db.add_food_log_entry(date_str, "Снэк 2", sn2_f, "None", float(st.session_state.snack_portion), 0.0, m['protein'], m['carbs'], m['fat'], cals_d)
                 
             # Log Dinner
             di = plan_for_day.get("Ужин", {})
             di_p = di.get("protein", "None")
             di_g = di.get("garnish", "None")
             if di_p != "None":
-                m = st.session_state.food_macros.get(di_p, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
-                db.add_food_log_entry(date_str, "Ужин", di_p, "None", float(st.session_state.protein_portion), 0.0, m['protein'], m['carbs'], m['fat'])
+                m = st.session_state.food_macros.get(di_p, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0, 'calories': 0.0})
+                cals_d = m.get('calories', 0.0)
+                if cals_d == 0.0:
+                    cals_d = m['protein'] * 4.0 + m['carbs'] * 4.0 + m['fat'] * 9.0
+                db.add_food_log_entry(date_str, "Ужин", di_p, "None", float(st.session_state.protein_portion), 0.0, m['protein'], m['carbs'], m['fat'], cals_d)
             if di_g != "None":
-                m = st.session_state.food_macros.get(di_g, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
-                db.add_food_log_entry(date_str, "Ужин", di_g, "None", float(st.session_state.garnish_portion), 0.0, m['protein'], m['carbs'], m['fat'])
+                m = st.session_state.food_macros.get(di_g, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0, 'calories': 0.0})
+                cals_d = m.get('calories', 0.0)
+                if cals_d == 0.0:
+                    cals_d = m['protein'] * 4.0 + m['carbs'] * 4.0 + m['fat'] * 9.0
+                db.add_food_log_entry(date_str, "Ужин", di_g, "None", float(st.session_state.garnish_portion), 0.0, m['protein'], m['carbs'], m['fat'], cals_d)
                 
             st.success(_t('log_success_msg'))
             st.rerun()
@@ -713,6 +767,7 @@ with tab_log:
     day_total_p = 0.0
     day_total_c = 0.0
     day_total_f = 0.0
+    day_total_cal = 0.0
 
     for meal_type in meal_type_options:
         with st.container(border=True):
@@ -728,12 +783,13 @@ with tab_log:
                     f_port = entry['food_portion']
                     g_port = entry['garnish_portion']
                     
-                    p_val, c_val, f_val = 0.0, 0.0, 0.0
+                    p_val, c_val, f_val, cal_val = 0.0, 0.0, 0.0, 0.0
                     
                     # Compute macros
                     p_density = entry.get('protein_density', 0.0)
                     c_density = entry.get('carbs_density', 0.0)
                     f_density = entry.get('fat_density', 0.0)
+                    cal_density = entry.get('calories', 0.0)
                     
                     if p_density == 0.0 and c_density == 0.0 and f_density == 0.0:
                         if f_name != "None" and f_name in st.session_state.food_macros:
@@ -741,14 +797,20 @@ with tab_log:
                             p_density = f_macro['protein']
                             c_density = f_macro['carbs']
                             f_density = f_macro['fat']
+                            cal_density = f_macro.get('calories', 0.0)
+                            
+                    if cal_density == 0.0:
+                        cal_density = p_density * 4.0 + c_density * 4.0 + f_density * 9.0
                             
                     p_val += p_density * f_port / 100.0
                     c_val += c_density * f_port / 100.0
                     f_val += f_density * f_port / 100.0
+                    cal_val += cal_density * f_port / 100.0
                         
                     day_total_p += p_val
                     day_total_c += c_val
                     day_total_f += f_val
+                    day_total_cal += cal_val
                     
                     # Row for the food entry
                     col_item_desc, col_item_macros, col_item_del = st.columns([4, 3, 1])
@@ -760,7 +822,7 @@ with tab_log:
                             desc_parts.append(f"{translate_food(g_name)} ({int(g_port)}g)")
                         st.write(" + ".join(desc_parts) if desc_parts else "-")
                     with col_item_macros:
-                        st.write(f"P: {p_val:.1f}g | C: {c_val:.1f}g | F: {f_val:.1f}g")
+                        st.write(f"P: {p_val:.1f}g | C: {c_val:.1f}g | F: {f_val:.1f}g | Cal: {cal_val:.0f}")
                     with col_item_del:
                         if st.button(_t('delete_btn'), key=f"del_log_{entry['id']}", use_container_width=True):
                             db.delete_food_log_entry(entry['id'])
@@ -842,23 +904,30 @@ with tab_log:
             # If Custom, display a row underneath for macros inputs
             if custom_fields_active:
                 st.markdown("<div style='font-size:0.85rem; color:#64748b; margin-bottom:0.2rem;'>Nutrient Densities (g/100g) / Пищевая ценность (г/100г)</div>", unsafe_allow_html=True)
-                col_custom_p, col_custom_c, col_custom_f = st.columns(3)
+                col_custom_p, col_custom_c, col_custom_f, col_custom_cal = st.columns(4)
                 with col_custom_p:
                     c_prot = st.number_input(_t('custom_protein_label'), min_value=0.0, max_value=100.0, value=10.0, step=0.5, key=f"custom_prot_{meal_type}")
                 with col_custom_c:
                     c_carb = st.number_input(_t('custom_carbs_label'), min_value=0.0, max_value=100.0, value=0.0, step=0.5, key=f"custom_carb_{meal_type}")
                 with col_custom_f:
                     c_fat = st.number_input(_t('custom_fat_label'), min_value=0.0, max_value=100.0, value=0.0, step=0.5, key=f"custom_fat_{meal_type}")
+                with col_custom_cal:
+                    c_cal = st.number_input(_t('custom_calories_label'), min_value=0.0, max_value=900.0, value=c_prot*4.0+c_carb*4.0+c_fat*9.0, step=1.0, key=f"custom_cal_{meal_type}")
             elif food_select != "None":
-                default_macros = st.session_state.food_macros.get(food_select, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0})
+                default_macros = st.session_state.food_macros.get(food_select, {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0, 'calories': 0.0})
+                default_cals = default_macros.get('calories', 0.0)
+                if default_cals == 0.0:
+                    default_cals = float(default_macros['protein']) * 4.0 + float(default_macros['carbs']) * 4.0 + float(default_macros['fat']) * 9.0
                 st.markdown("<div style='font-size:0.85rem; color:#64748b; margin-bottom:0.2rem;'>Nutrient Densities (g/100g) / Пищевая ценность (г/100г)</div>", unsafe_allow_html=True)
-                col_pred_p, col_pred_c, col_pred_f = st.columns(3)
+                col_pred_p, col_pred_c, col_pred_f, col_pred_cal = st.columns(4)
                 with col_pred_p:
                     c_prot = st.number_input(_t('custom_protein_label'), min_value=0.0, max_value=100.0, value=float(default_macros['protein']), step=0.5, key=f"pred_prot_{meal_type}_{food_select}")
                 with col_pred_c:
                     c_carb = st.number_input(_t('custom_carbs_label'), min_value=0.0, max_value=100.0, value=float(default_macros['carbs']), step=0.5, key=f"pred_carb_{meal_type}_{food_select}")
                 with col_pred_f:
                     c_fat = st.number_input(_t('custom_fat_label'), min_value=0.0, max_value=100.0, value=float(default_macros['fat']), step=0.5, key=f"pred_fat_{meal_type}_{food_select}")
+                with col_pred_cal:
+                    c_cal = st.number_input(_t('custom_calories_label'), min_value=0.0, max_value=900.0, value=float(default_cals), step=1.0, key=f"pred_cal_{meal_type}_{food_select}")
             
             with col_add_btn:
                 if st.button(_t('log_add_item_btn'), key=f"add_btn_{meal_type}", use_container_width=True, type="secondary"):
@@ -868,14 +937,15 @@ with tab_log:
                             st.error("Please enter a custom name!" if lang == 'en' else "Введите название продукта!")
                         else:
                             # Save custom food to DB
-                            db.add_food_to_db(clean_custom_name, "Other", c_prot, c_carb, c_fat)
+                            db.add_food_to_db(clean_custom_name, "Other", c_prot, c_carb, c_fat, c_cal)
                             # Update active cache
                             if clean_custom_name not in st.session_state.others_db:
                                 st.session_state.others_db.append(clean_custom_name)
                             st.session_state.food_macros[clean_custom_name] = {
                                 'protein': c_prot,
                                 'carbs': c_carb,
-                                'fat': c_fat
+                                'fat': c_fat,
+                                'calories': c_cal
                             }
                             # Log entry
                             db.add_food_log_entry(
@@ -887,7 +957,8 @@ with tab_log:
                                 garnish_portion=0.0,
                                 protein_density=c_prot,
                                 carbs_density=c_carb,
-                                fat_density=c_fat
+                                fat_density=c_fat,
+                                calories=c_cal
                             )
                             st.success(_t('log_success_msg'))
                             st.rerun()
@@ -902,7 +973,8 @@ with tab_log:
                                 garnish_portion=0.0,
                                 protein_density=c_prot,
                                 carbs_density=c_carb,
-                                fat_density=c_fat
+                                fat_density=c_fat,
+                                calories=c_cal
                             )
                             st.success(_t('log_success_msg'))
                             st.rerun()
@@ -912,7 +984,7 @@ with tab_log:
     # 3. Daily Summary Totals
     unit_g = 'г' if lang == 'ru' else 'g'
     st.markdown(f"#### {'Day Totals' if lang == 'en' else 'Итого за день'}")
-    col_t1, col_t2, col_t3 = st.columns(3)
+    col_t1, col_t2, col_t3, col_t4 = st.columns(4)
     with col_t1:
         st.markdown(f"""
         <div class="card">
@@ -932,6 +1004,13 @@ with tab_log:
         <div class="card">
             <p class="metric-value">{day_total_f:.1f} {unit_g}</p>
             <p class="metric-label">{'Fats' if lang == 'en' else 'Жиры'}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_t4:
+        st.markdown(f"""
+        <div class="card">
+            <p class="metric-value" style="color: #D946EF;">{day_total_cal:.0f} kcal</p>
+            <p class="metric-label">{'Calories' if lang == 'en' else 'Калории'}</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1122,6 +1201,7 @@ with tab_stats:
     day_total_p = 0.0
     day_total_c = 0.0
     day_total_f = 0.0
+    day_total_cal = 0.0
     
     for entry in daily_logs:
         f_name = entry['food_name']
@@ -1132,6 +1212,7 @@ with tab_stats:
         p_density = entry.get('protein_density', 0.0)
         c_density = entry.get('carbs_density', 0.0)
         f_density = entry.get('fat_density', 0.0)
+        cal_density = entry.get('calories', 0.0)
         
         if p_density == 0.0 and c_density == 0.0 and f_density == 0.0:
             if f_name != "None" and f_name in st.session_state.food_macros:
@@ -1139,16 +1220,25 @@ with tab_stats:
                 p_density = f_macro['protein']
                 c_density = f_macro['carbs']
                 f_density = f_macro['fat']
+                cal_density = f_macro.get('calories', 0.0)
                 
+        if cal_density == 0.0:
+            cal_density = p_density * 4.0 + c_density * 4.0 + f_density * 9.0
+            
         day_total_p += p_density * f_port / 100.0
         day_total_c += c_density * f_port / 100.0
         day_total_f += f_density * f_port / 100.0
+        day_total_cal += cal_density * f_port / 100.0
             
         if g_name != "None" and g_name in st.session_state.food_macros:
             g_macro = st.session_state.food_macros[g_name]
             day_total_p += g_macro['protein'] * g_port / 100.0
             day_total_c += g_macro['carbs'] * g_port / 100.0
             day_total_f += g_macro['fat'] * g_port / 100.0
+            g_cal_density = g_macro.get('calories', 0.0)
+            if g_cal_density == 0.0:
+                g_cal_density = g_macro['protein'] * 4.0 + g_macro['carbs'] * 4.0 + g_macro['fat'] * 9.0
+            day_total_cal += g_cal_density * g_port / 100.0
             
     target_protein = st.session_state.target_protein
     target_carbs = st.session_state.target_carbs
@@ -1159,7 +1249,7 @@ with tab_stats:
     progress_c_day = min(1.0, day_total_c / target_carbs) if target_carbs > 0 else 0.0
     progress_f_day = min(1.0, day_total_f / target_fat) if target_fat > 0 else 0.0
     
-    col_dp, col_dc, col_df = st.columns(3)
+    col_dp, col_dc, col_df, col_dcal = st.columns(4)
     
     with col_dp:
         st.subheader("🥩 " + ("Protein" if lang == 'en' else "Белки"))
@@ -1212,6 +1302,25 @@ with tab_stats:
         else:
             st.error("🔴 Below goal" if lang == 'en' else "🔴 Ниже нормы")
 
+    with col_dcal:
+        st.subheader("🔥 " + ("Calories" if lang == 'en' else "Калории"))
+        target_calories = target_protein * 4.0 + target_carbs * 4.0 + target_fat * 9.0
+        progress_cal_day = min(1.0, day_total_cal / target_calories) if target_calories > 0 else 0.0
+        st.markdown(f"""
+        <div class="card">
+            <p class="metric-value" style="color: #D946EF;">{day_total_cal:.0f} kcal</p>
+            <p class="metric-label">{"Calorie Intake" if lang == 'en' else "Потребление калорий"}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown(f"**Goal: {target_calories:.0f} kcal ({progress_cal_day*100:.0f}%)**" if lang == 'en' else f"**Цель: {target_calories:.0f} ккал ({progress_cal_day*100:.0f}%)**")
+        st.progress(progress_cal_day)
+        if day_total_cal >= target_calories:
+            st.success("🎉 Met goal!" if lang == 'en' else "🎉 Норма достигнута!")
+        elif day_total_cal >= target_calories * 0.8:
+            st.warning("⚠️ Near goal" if lang == 'en' else "⚠️ Около нормы")
+        else:
+            st.error("🔴 Below goal" if lang == 'en' else "🔴 Ниже нормы")
+
     st.markdown("---")
     
     # 2. Period Analysis Section
@@ -1236,12 +1345,14 @@ with tab_stats:
     total_p = 0.0
     total_c = 0.0
     total_f = 0.0
+    total_cal = 0.0
     daily_macros_data = []
     
     for d_str in sorted(logs_by_date.keys()):
         day_p = 0.0
         day_c = 0.0
         day_f = 0.0
+        day_cal = 0.0
         
         for entry in logs_by_date[d_str]:
             f_name = entry['food_name']
@@ -1252,6 +1363,7 @@ with tab_stats:
             p_density = entry.get('protein_density', 0.0)
             c_density = entry.get('carbs_density', 0.0)
             f_density = entry.get('fat_density', 0.0)
+            cal_density = entry.get('calories', 0.0)
             
             if p_density == 0.0 and c_density == 0.0 and f_density == 0.0:
                 if f_name != "None" and f_name in st.session_state.food_macros:
@@ -1259,45 +1371,59 @@ with tab_stats:
                     p_density = f_macro['protein']
                     c_density = f_macro['carbs']
                     f_density = f_macro['fat']
+                    cal_density = f_macro.get('calories', 0.0)
+                    
+            if cal_density == 0.0:
+                cal_density = p_density * 4.0 + c_density * 4.0 + f_density * 9.0
                     
             day_p += p_density * f_port / 100.0
             day_c += c_density * f_port / 100.0
             day_f += f_density * f_port / 100.0
+            day_cal += cal_density * f_port / 100.0
                 
             if g_name != "None" and g_name in st.session_state.food_macros:
                 g_macro = st.session_state.food_macros[g_name]
                 day_p += g_macro['protein'] * g_port / 100.0
                 day_c += g_macro['carbs'] * g_port / 100.0
                 day_f += g_macro['fat'] * g_port / 100.0
+                g_cal_density = g_macro.get('calories', 0.0)
+                if g_cal_density == 0.0:
+                    g_cal_density = g_macro['protein'] * 4.0 + g_macro['carbs'] * 4.0 + g_macro['fat'] * 9.0
+                day_cal += g_cal_density * g_port / 100.0
                 
         total_p += day_p
         total_c += day_c
         total_f += day_f
+        total_cal += day_cal
         
         # Format date for index display
         daily_macros_data.append({
             _t('day_label_column'): d_str,
             'Protein' if lang == 'en' else 'Белки': round(day_p, 1),
             'Carbs' if lang == 'en' else 'Углеводы': round(day_c, 1),
-            'Fats' if lang == 'en' else 'Жиры': round(day_f, 1)
+            'Fats' if lang == 'en' else 'Жиры': round(day_f, 1),
+            'Calories' if lang == 'en' else 'Калории': round(day_cal, 1)
         })
         
     num_days = max(1, len(all_dates))
     avg_daily_p = total_p / num_days
     avg_daily_c = total_c / num_days
     avg_daily_f = total_f / num_days
+    avg_daily_cal = total_cal / num_days
     
     target_protein = st.session_state.target_protein
     target_carbs = st.session_state.target_carbs
     target_fat = st.session_state.target_fat
+    target_calories = target_protein * 4.0 + target_carbs * 4.0 + target_fat * 9.0
     unit_g = 'г' if lang == 'ru' else 'g'
     
     progress_p = min(1.0, avg_daily_p / target_protein) if target_protein > 0 else 0.0
     progress_c = min(1.0, avg_daily_c / target_carbs) if target_carbs > 0 else 0.0
     progress_f = min(1.0, avg_daily_f / target_fat) if target_fat > 0 else 0.0
-
+    progress_cal = min(1.0, avg_daily_cal / target_calories) if target_calories > 0 else 0.0
+ 
     # UI Columns for each macro
-    col_p, col_c, col_f = st.columns(3)
+    col_p, col_c, col_f, col_cal = st.columns(4)
     
     with col_p:
         st.subheader("🥩 " + ("Protein" if lang == 'en' else "Белки"))
@@ -1315,7 +1441,7 @@ with tab_stats:
             st.warning(_t('warning_goal_msg').format(avg=avg_daily_p, percent=progress_p*100, target=target_protein))
         else:
             st.error(_t('error_goal_msg').format(avg=avg_daily_p, target=target_protein))
-
+ 
     with col_c:
         st.subheader("🌾 " + ("Carbohydrates" if lang == 'en' else "Углеводы"))
         st.markdown(f"""
@@ -1332,7 +1458,7 @@ with tab_stats:
             st.warning("⚠️ Near goal" if lang == 'en' else "⚠️ Около нормы")
         else:
             st.error("🔴 Below goal" if lang == 'en' else "🔴 Ниже нормы")
-
+ 
     with col_f:
         st.subheader("🧈 " + ("Fats" if lang == 'en' else "Жиры"))
         st.markdown(f"""
@@ -1349,6 +1475,24 @@ with tab_stats:
             st.warning("⚠️ Near goal" if lang == 'en' else "⚠️ Около нормы")
         else:
             st.error("🔴 Below goal" if lang == 'en' else "🔴 Ниже нормы")
+
+    with col_cal:
+        st.subheader("🔥 " + ("Calories" if lang == 'en' else "Калории"))
+        st.markdown(f"""
+        <div class="card">
+            <p class="metric-value" style="color: #D946EF;">{avg_daily_cal:.0f} kcal</p>
+            <p class="metric-label">{"Avg Daily Calories" if lang == 'en' else "Средние калории в день"}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown(f"**Goal: {target_calories:.0f} kcal ({progress_cal*100:.0f}%)**" if lang == 'en' else f"**Цель: {target_calories:.0f} ккал ({progress_cal*100:.0f}%)**")
+        st.progress(progress_cal)
+        if avg_daily_cal >= target_calories:
+            st.success("🎉 Met goal!" if lang == 'en' else "🎉 Норма достигнута!")
+        elif avg_daily_cal >= target_calories * 0.8:
+            st.warning("⚠️ Near goal" if lang == 'en' else "⚠️ Около нормы")
+        else:
+            st.error("🔴 Below goal" if lang == 'en' else "🔴 Ниже нормы")
+
 
     import altair as alt
 
@@ -1976,6 +2120,129 @@ with tab_settings:
         if st.button(_t('add_product_btn'), use_container_width=True, type="primary"):
             add_product_dialog()
             
+    st.divider()
+    st.markdown(f"### {_t('edit_meal_header')}")
+    
+    # Get sorted list of all foods in the database
+    all_food_names = sorted(list(st.session_state.food_macros.keys()))
+    
+    # Selectbox to pick a food item
+    selected_edit_food = st.selectbox(
+        _t('select_meal_to_edit'),
+        all_food_names,
+        format_func=translate_food,
+        key="edit_food_selectbox"
+    )
+    
+    if selected_edit_food:
+        # Load current values from food_macros
+        current_macros = st.session_state.food_macros[selected_edit_food]
+        
+        # Find category of this food item
+        current_category = "Other"
+        if selected_edit_food in st.session_state.proteins_db:
+            current_category = "Proteins"
+        elif selected_edit_food in st.session_state.garnishes_db:
+            current_category = "Garnish"
+        elif selected_edit_food in st.session_state.snacks_db:
+            current_category = "Snack"
+        elif selected_edit_food in st.session_state.salads_db:
+            current_category = "Salad"
+        elif selected_edit_food in st.session_state.dressings_db:
+            current_category = "Dressing"
+        elif selected_edit_food in st.session_state.others_db:
+            current_category = "Other"
+            
+        category_options = ["Proteins", "Garnish", "Snack", "Salad", "Dressing", "Other"]
+        cat_index = category_options.index(current_category) if current_category in category_options else 5
+        
+        edit_col1, edit_col2 = st.columns(2)
+        with edit_col1:
+            edit_category = st.selectbox(
+                _t('type_label') + " (Edit)",
+                category_options,
+                index=cat_index,
+                format_func=lambda x: translations.get("category_display", {}).get(x, x),
+                key=f"edit_category_select_{selected_edit_food}"
+            )
+            edit_prot = st.number_input(
+                _t('protein_density_label'),
+                min_value=0.0,
+                max_value=100.0,
+                value=float(current_macros['protein']),
+                step=0.1,
+                format="%.1f",
+                key=f"edit_prot_input_{selected_edit_food}"
+            )
+            edit_carb = st.number_input(
+                _t('carbs_density_label'),
+                min_value=0.0,
+                max_value=100.0,
+                value=float(current_macros['carbs']),
+                step=0.1,
+                format="%.1f",
+                key=f"edit_carb_input_{selected_edit_food}"
+            )
+        with edit_col2:
+            edit_fat = st.number_input(
+                _t('fat_density_label'),
+                min_value=0.0,
+                max_value=100.0,
+                value=float(current_macros['fat']),
+                step=0.1,
+                format="%.1f",
+                key=f"edit_fat_input_{selected_edit_food}"
+            )
+            # Default calories calculated if calories is 0
+            curr_cals = current_macros.get('calories', 0.0)
+            if curr_cals == 0.0:
+                curr_cals = float(current_macros['protein']) * 4.0 + float(current_macros['carbs']) * 4.0 + float(current_macros['fat']) * 9.0
+            edit_cals = st.number_input(
+                _t('calories_density_label'),
+                min_value=0.0,
+                max_value=900.0,
+                value=float(curr_cals),
+                step=1.0,
+                format="%.1f",
+                key=f"edit_cals_input_{selected_edit_food}"
+            )
+            
+            st.write("<br>", unsafe_allow_html=True)
+            if st.button(_t('edit_meal_btn'), key=f"edit_save_btn_{selected_edit_food}", use_container_width=True, type="primary"):
+                # Save to database
+                db.update_food_in_db(selected_edit_food, edit_category, edit_prot, edit_carb, edit_fat, edit_cals)
+                
+                # Update DB caches in session state
+                if current_category != edit_category:
+                    # Remove from old
+                    old_db_name = current_category.lower() + "s_db"
+                    if current_category == "Garnish":
+                        old_db_name = "garnishes_db"
+                    if hasattr(st.session_state, old_db_name):
+                        db_list = getattr(st.session_state, old_db_name)
+                        if selected_edit_food in db_list:
+                            db_list.remove(selected_edit_food)
+                    
+                    # Add to new
+                    new_db_name = edit_category.lower() + "s_db"
+                    if edit_category == "Garnish":
+                        new_db_name = "garnishes_db"
+                    if hasattr(st.session_state, new_db_name):
+                        db_list = getattr(st.session_state, new_db_name)
+                        if selected_edit_food not in db_list:
+                            db_list.append(selected_edit_food)
+                
+                # Update food macros cache
+                st.session_state.food_macros[selected_edit_food] = {
+                    'protein': edit_prot,
+                    'carbs': edit_carb,
+                    'fat': edit_fat,
+                    'calories': edit_cals
+                }
+                
+                st.success(_t('success_updated_msg').format(name=selected_edit_food))
+                st.rerun()
+
     st.divider()
     
     # Portions

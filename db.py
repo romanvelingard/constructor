@@ -92,7 +92,8 @@ def init_db():
             category TEXT NOT NULL,
             protein_density REAL NOT NULL,
             carbs_density REAL NOT NULL DEFAULT 0.0,
-            fat_density REAL NOT NULL DEFAULT 0.0
+            fat_density REAL NOT NULL DEFAULT 0.0,
+            calories REAL NOT NULL DEFAULT 0.0
         )
     """)
 
@@ -162,7 +163,8 @@ def init_db():
             garnish_portion REAL NOT NULL,
             protein_density REAL NOT NULL DEFAULT 0.0,
             carbs_density REAL NOT NULL DEFAULT 0.0,
-            fat_density REAL NOT NULL DEFAULT 0.0
+            fat_density REAL NOT NULL DEFAULT 0.0,
+            calories REAL NOT NULL DEFAULT 0.0
         )
     """)
 
@@ -193,6 +195,34 @@ def init_db():
         except Exception:
             pass
 
+    # Migration: Add calories column to foods
+    try:
+        execute_query(cursor, "SELECT calories FROM foods LIMIT 1")
+    except Exception:
+        if is_postgres():
+            conn.rollback()
+            cursor = conn.cursor()
+        try:
+            execute_query(cursor, "ALTER TABLE foods ADD COLUMN calories REAL NOT NULL DEFAULT 0.0")
+            execute_query(cursor, "UPDATE foods SET calories = protein_density * 4.0 + carbs_density * 4.0 + fat_density * 9.0")
+            conn.commit()
+        except Exception:
+            pass
+
+    # Migration: Add calories column to food_log
+    try:
+        execute_query(cursor, "SELECT calories FROM food_log LIMIT 1")
+    except Exception:
+        if is_postgres():
+            conn.rollback()
+            cursor = conn.cursor()
+        try:
+            execute_query(cursor, "ALTER TABLE food_log ADD COLUMN calories REAL NOT NULL DEFAULT 0.0")
+            execute_query(cursor, "UPDATE food_log SET calories = protein_density * 4.0 + carbs_density * 4.0 + fat_density * 9.0")
+            conn.commit()
+        except Exception:
+            pass
+
     # Seed default user if empty
     execute_query(cursor, "SELECT COUNT(*) FROM users")
     if cursor.fetchone()[0] == 0:
@@ -208,36 +238,36 @@ def init_db():
     execute_query(cursor, "SELECT COUNT(*) FROM foods")
     if cursor.fetchone()[0] == 0:
         default_foods = [
-            ('Turkey', 'Proteins', 25.0, 0.0, 1.0),
-            ('Chicken', 'Proteins', 24.0, 0.0, 3.0),
-            ('Fish', 'Proteins', 21.0, 0.0, 5.0),
-            ('Beef', 'Proteins', 26.0, 0.0, 15.0),
-            ('Liver', 'Proteins', 20.0, 4.0, 5.0),
-            ('Tuna', 'Proteins', 22.0, 0.0, 1.0),
-            ('Sardines', 'Proteins', 23.0, 0.0, 10.0),
-            ('Beans', 'Proteins', 8.0, 20.0, 0.5),
-            ('Cottage Cheese', 'Proteins', 15.0, 3.0, 4.0),
-            ('Tofu', 'Proteins', 15.0, 2.0, 8.0),
-            ('Buckwheat', 'Garnish', 3.0, 20.0, 1.0),
-            ('Quinoa', 'Garnish', 4.0, 21.0, 2.0),
-            ('Rice', 'Garnish', 2.5, 28.0, 0.3),
-            ('Potato', 'Garnish', 2.0, 17.0, 0.1),
-            ('Pasta', 'Garnish', 5.0, 30.0, 1.0),
-            ('Almonds', 'Snack', 21.0, 22.0, 50.0),
-            ('Cashews', 'Snack', 18.0, 30.0, 44.0),
-            ('Walnuts', 'Snack', 15.0, 14.0, 65.0),
-            ('Gouda cheese', 'Proteins', 25.0, 2.2, 27.0),
-            ('Majadra', 'Garnish', 5.0, 23.0, 3.0),
-            ('Protein Yogurt', 'Proteins', 10.0, 4.0, 0.0),
-            ('Soft white cheese', 'Proteins', 11.0, 3.5, 5.0),
-            ('bread', 'Garnish', 9.0, 49.0, 3.2),
-            ('baguete', 'Garnish', 9.2, 52.0, 1.5),
-            ('rie bread', 'Garnish', 8.5, 48.0, 1.5),
-            ('Pita', 'Garnish', 9.0, 55.0, 1.2),
-            ('Eggs L size', 'Proteins', 13.0, 1.1, 11.0),
-            ('Eggs M size', 'Proteins', 13.0, 1.1, 11.0)
+            ('Turkey', 'Proteins', 30.0, 0.0, 1.5, 135.0),
+            ('Chicken', 'Proteins', 31.0, 0.0, 3.6, 165.0),
+            ('Fish', 'Proteins', 20.0, 0.0, 1.7, 95.0),
+            ('Beef', 'Proteins', 26.0, 0.0, 15.0, 250.0),
+            ('Liver', 'Proteins', 20.0, 4.0, 5.0, 141.0),
+            ('Tuna', 'Proteins', 28.0, 0.0, 1.0, 130.0),
+            ('Sardines', 'Proteins', 25.0, 0.0, 11.0, 208.0),
+            ('Beans', 'Proteins', 8.0, 20.0, 0.5, 130.0),
+            ('Cottage Cheese', 'Proteins', 11.0, 3.4, 4.3, 98.0),
+            ('Tofu', 'Proteins', 8.0, 2.0, 4.8, 76.0),
+            ('Buckwheat', 'Garnish', 3.4, 20.0, 0.6, 92.0),
+            ('Quinoa', 'Garnish', 4.4, 21.0, 1.9, 120.0),
+            ('Rice', 'Garnish', 2.7, 28.0, 0.3, 130.0),
+            ('Potato', 'Garnish', 2.0, 20.0, 0.1, 87.0),
+            ('Pasta', 'Garnish', 5.8, 31.0, 0.9, 158.0),
+            ('Almonds', 'Snack', 21.0, 22.0, 50.0, 579.0),
+            ('Cashews', 'Snack', 18.0, 30.0, 44.0, 553.0),
+            ('Walnuts', 'Snack', 15.0, 14.0, 65.0, 654.0),
+            ('Gouda cheese', 'Proteins', 25.0, 2.2, 27.0, 356.0),
+            ('Majadra', 'Garnish', 5.0, 23.0, 3.0, 139.0),
+            ('Protein Yogurt', 'Proteins', 10.0, 4.0, 0.0, 56.0),
+            ('Soft white cheese', 'Proteins', 11.0, 3.5, 5.0, 100.0),
+            ('bread', 'Garnish', 9.0, 49.0, 3.2, 265.0),
+            ('baguete', 'Garnish', 9.2, 52.0, 1.5, 260.0),
+            ('rie bread', 'Garnish', 8.5, 48.0, 3.3, 259.0),
+            ('Pita', 'Garnish', 9.0, 55.0, 1.2, 275.0),
+            ('Eggs L size', 'Proteins', 13.0, 1.1, 11.0, 155.0),
+            ('Eggs M size', 'Proteins', 13.0, 1.1, 11.0, 155.0)
         ]
-        execute_many(cursor, "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density) VALUES (?, ?, ?, ?, ?)", default_foods)
+        execute_many(cursor, "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density, calories) VALUES (?, ?, ?, ?, ?, ?)", default_foods)
         conn.commit()
 
     # Seed default meal plan if empty for Roman
@@ -327,20 +357,20 @@ def get_all_food_macros():
     """Retrieve macronutrient densities for all foods."""
     conn = get_connection()
     cursor = conn.cursor()
-    execute_query(cursor, "SELECT name, protein_density, carbs_density, fat_density FROM foods")
+    execute_query(cursor, "SELECT name, protein_density, carbs_density, fat_density, calories FROM foods")
     rows = cursor.fetchall()
     conn.close()
-    return {row[0]: {'protein': row[1], 'carbs': row[2], 'fat': row[3]} for row in rows}
+    return {row[0]: {'protein': row[1], 'carbs': row[2], 'fat': row[3], 'calories': row[4]} for row in rows}
 
-def add_food_to_db(name, category, protein_density, carbs_density=0.0, fat_density=0.0):
+def add_food_to_db(name, category, protein_density, carbs_density=0.0, fat_density=0.0, calories=0.0):
     """Insert a new food item with macronutrients into the database."""
     conn = get_connection()
     cursor = conn.cursor()
     try:
         execute_query(
             cursor,
-            "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density) VALUES (?, ?, ?, ?, ?)",
-            (name, category, protein_density, carbs_density, fat_density)
+            "INSERT INTO foods (name, category, protein_density, carbs_density, fat_density, calories) VALUES (?, ?, ?, ?, ?, ?)",
+            (name, category, protein_density, carbs_density, fat_density, calories)
         )
         conn.commit()
         success = True
@@ -349,6 +379,24 @@ def add_food_to_db(name, category, protein_density, carbs_density=0.0, fat_densi
             success = False
         else:
             raise e
+    finally:
+        conn.close()
+    return success
+
+def update_food_in_db(name, category, protein_density, carbs_density, fat_density, calories):
+    """Update nutrients of an existing food item in the database."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        execute_query(
+            cursor,
+            "UPDATE foods SET category = ?, protein_density = ?, carbs_density = ?, fat_density = ?, calories = ? WHERE name = ?",
+            (category, protein_density, carbs_density, fat_density, calories, name)
+        )
+        conn.commit()
+        success = True
+    except Exception:
+        success = False
     finally:
         conn.close()
     return success
@@ -563,7 +611,7 @@ def get_food_log(user_id, date_str):
     """Retrieve logged foods for a specific date and user."""
     conn = get_connection()
     cursor = conn.cursor()
-    execute_query(cursor, "SELECT id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density FROM food_log WHERE user_id = ? AND date = ? ORDER BY id ASC", (user_id, date_str))
+    execute_query(cursor, "SELECT id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density, calories FROM food_log WHERE user_id = ? AND date = ? ORDER BY id ASC", (user_id, date_str))
     rows = cursor.fetchall()
     conn.close()
     return [
@@ -577,19 +625,20 @@ def get_food_log(user_id, date_str):
             'garnish_portion': row[6],
             'protein_density': row[7],
             'carbs_density': row[8],
-            'fat_density': row[9]
+            'fat_density': row[9],
+            'calories': row[10]
         }
         for row in rows
     ]
 
-def add_food_log_entry(user_id, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density=0.0, carbs_density=0.0, fat_density=0.0):
+def add_food_log_entry(user_id, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density=0.0, carbs_density=0.0, fat_density=0.0, calories=0.0):
     """Record a logged food entry for a user."""
     conn = get_connection()
     cursor = conn.cursor()
     execute_query(
         cursor,
-        "INSERT INTO food_log (user_id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (user_id, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density)
+        "INSERT INTO food_log (user_id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density, calories) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (user_id, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density, calories)
     )
     conn.commit()
     conn.close()
@@ -608,7 +657,7 @@ def get_actual_intake_in_range(user_id, start_date_str, end_date_str):
     cursor = conn.cursor()
     execute_query(
         cursor,
-        "SELECT id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density FROM food_log WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC, id ASC",
+        "SELECT id, date, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density, calories FROM food_log WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC, id ASC",
         (user_id, start_date_str, end_date_str)
     )
     rows = cursor.fetchall()
@@ -624,7 +673,8 @@ def get_actual_intake_in_range(user_id, start_date_str, end_date_str):
             'garnish_portion': row[6],
             'protein_density': row[7],
             'carbs_density': row[8],
-            'fat_density': row[9]
+            'fat_density': row[9],
+            'calories': row[10]
         }
         for row in rows
     ]

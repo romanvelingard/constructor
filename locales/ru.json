@@ -140,7 +140,13 @@
     "confirm_password_label": "Подтвердите новый пароль",
     "pw_change_success": "Пароль успешно изменен!",
     "pw_change_mismatch": "Пароли не совпадают!",
-    "pw_change_empty": "Пароль не может быть пустым!"
+    "pw_change_empty": "Пароль не может быть пустым!",
+    "calories_density_label": "Калорийность (ккал/100г):",
+    "custom_calories_label": "Калории (ккал/100г):",
+    "edit_meal_header": "✏️ Редактировать продукт в базе данных",
+    "select_meal_to_edit": "Выберите продукт для изменения:",
+    "edit_meal_btn": "Сохранить изменения в базе",
+    "success_updated_msg": "Продукт '{name}' успешно обновлен!"
   },
   "foods": {
     "Turkey": "Индейка",

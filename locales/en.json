@@ -140,7 +140,13 @@
     "confirm_password_label": "Confirm New Password",
     "pw_change_success": "Password changed successfully!",
     "pw_change_mismatch": "Passwords do not match!",
-    "pw_change_empty": "Password cannot be empty!"
+    "pw_change_empty": "Password cannot be empty!",
+    "calories_density_label": "Calories (kcal/100g):",
+    "custom_calories_label": "Calories (kcal/100g):",
+    "edit_meal_header": "✏️ Edit Database Food",
+    "select_meal_to_edit": "Select food to edit:",
+    "edit_meal_btn": "Save Changes to Database",
+    "success_updated_msg": "Product '{name}' successfully updated!"
   },
   "foods": {
     "Turkey": "Turkey",
