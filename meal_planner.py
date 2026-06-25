@@ -83,10 +83,10 @@ class DBWrapper:
             cache[key] = db_original.get_food_log(self.uid, date_str)
         return cache[key]
 
-    def add_food_log_entry(self, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density=0.0, carbs_density=0.0, fat_density=0.0):
+    def add_food_log_entry(self, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density=0.0, carbs_density=0.0, fat_density=0.0, calories=0.0):
         self._clear_cache("get_food_log")
         self._clear_cache("get_actual_intake_in_range")
-        return db_original.add_food_log_entry(self.uid, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density)
+        return db_original.add_food_log_entry(self.uid, date_str, meal_type, food_name, garnish_name, food_portion, garnish_portion, protein_density, carbs_density, fat_density, calories)
 
     def delete_food_log_entry(self, entry_id):
         self._clear_cache("get_food_log")
