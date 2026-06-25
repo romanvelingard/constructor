@@ -10,6 +10,10 @@ class DBWrapper:
     def uid(self):
         return st.session_state.user_id
 
+    def __getattr__(self, name):
+        """Fallback to forward calls to db_original if not explicitly wrapped."""
+        return getattr(db_original, name)
+
     def _get_cache(self):
         if 'db_cache' not in st.session_state:
             st.session_state.db_cache = {}
@@ -20,13 +24,24 @@ class DBWrapper:
         cache.clear()
 
     def get_foods_by_category(self, cat):
-        return db_original.get_foods_by_category(cat)
+        return _get_foods_by_category_cached(cat)
 
     def get_all_food_macros(self):
-        return db_original.get_all_food_macros()
+        return _get_all_food_macros_cached()
 
     def add_food_to_db(self, *args, **kwargs):
-        return db_original.add_food_to_db(*args, **kwargs)
+        res = db_original.add_food_to_db(*args, **kwargs)
+        if res:
+            _get_all_food_macros_cached.clear()
+            _get_foods_by_category_cached.clear()
+        return res
+
+    def update_food_in_db(self, *args, **kwargs):
+        res = db_original.update_food_in_db(*args, **kwargs)
+        if res:
+            _get_all_food_macros_cached.clear()
+            _get_foods_by_category_cached.clear()
+        return res
 
     def get_meal_plan_from_db(self):
         return db_original.get_meal_plan_from_db(self.uid)
@@ -116,6 +131,15 @@ class DBWrapper:
         return db_original.init_db()
 
 db_original = db
+
+@st.cache_data(ttl=600)
+def _get_all_food_macros_cached():
+    return db_original.get_all_food_macros()
+
+@st.cache_data(ttl=600)
+def _get_foods_by_category_cached(cat):
+    return db_original.get_foods_by_category(cat)
+
 db = DBWrapper()
 
 # Page configuration

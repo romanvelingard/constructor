@@ -180,6 +180,21 @@ def init_db():
 
     conn.commit()
 
+    # Performance optimization indexes
+    try:
+        execute_query(cursor, "CREATE INDEX IF NOT EXISTS idx_food_log_user_date ON food_log (user_id, date)")
+        execute_query(cursor, "CREATE INDEX IF NOT EXISTS idx_meal_plan_user ON meal_plan (user_id)")
+        execute_query(cursor, "CREATE INDEX IF NOT EXISTS idx_weight_history_user ON weight_history (user_id)")
+        execute_query(cursor, "CREATE INDEX IF NOT EXISTS idx_injection_history_user ON injection_history (user_id)")
+        execute_query(cursor, "CREATE INDEX IF NOT EXISTS idx_checked_groceries_user ON checked_groceries (user_id)")
+        execute_query(cursor, "CREATE INDEX IF NOT EXISTS idx_settings_user ON settings (user_id)")
+        execute_query(cursor, "CREATE INDEX IF NOT EXISTS idx_profile_user ON profile (user_id)")
+        conn.commit()
+    except Exception:
+        if is_postgres():
+            conn.rollback()
+            cursor = conn.cursor()
+
     # Migration: Add macro density columns to food_log
     try:
         execute_query(cursor, "SELECT protein_density FROM food_log LIMIT 1")
